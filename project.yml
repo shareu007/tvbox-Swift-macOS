@@ -1,0 +1,157 @@
+name: tvbox
+options:
+  bundleIdPrefix: com.tvbox
+  xcodeVersion: "15.0"
+  groupSortPosition: top
+  minimumXcodeGenVersion: "2.35"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    CODE_SIGN_STYLE: Automatic
+
+configFiles:
+  Debug: Config/Shared.xcconfig
+  Release: Config/Shared.xcconfig
+
+packages:
+  VLCKitSPM:
+    url: https://github.com/tylerjonesio/vlckit-spm
+    from: 3.6.0
+
+targets:
+  tvbox:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    dependencies:
+      - package: VLCKitSPM
+        product: VLCKitSPM
+    sources:
+      - path: tvbox
+        excludes:
+          - Info.plist
+    preBuildScripts:
+      - name: Prepare Local Configuration
+        script: '"${SRCROOT}/scripts/prepare_local_config.sh" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"'
+        basedOnDependencyAnalysis: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(TVBOX_IOS_BUNDLE_ID)"
+        INFOPLIST_FILE: tvbox/Info.plist
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        GENERATE_INFOPLIST_FILE: YES
+        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "1.0.3"
+        PRODUCT_NAME: TVBox
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SWIFT_EMIT_LOC_STRINGS: YES
+        SUPPORTS_MACCATALYST: YES
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+      configs:
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+
+  tvbox-Tests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: tvbox-Tests
+      - path: tvboxTests
+    dependencies:
+      - target: tvbox
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(TVBOX_IOS_BUNDLE_ID).tests"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/TVBox.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TVBox"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+      configs:
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+
+  tvbox-macOS:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    dependencies:
+      - package: VLCKitSPM
+        product: VLCKitSPM
+    sources:
+      - path: tvbox
+        excludes:
+          - Info.plist
+    preBuildScripts:
+      - name: Prepare Local Configuration
+        script: '"${SRCROOT}/scripts/prepare_local_config.sh" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"'
+        basedOnDependencyAnalysis: false
+      - name: Prepare Embedded Spider Gateway
+        script: '"${SRCROOT}/scripts/prepare_embedded_gateway.sh" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}" "${ARCHS}"'
+        basedOnDependencyAnalysis: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tvbox.app.macos
+        INFOPLIST_FILE: tvbox/Info.plist
+        GENERATE_INFOPLIST_FILE: YES
+        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "1.0.3"
+        PRODUCT_NAME: TVBox
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SWIFT_EMIT_LOC_STRINGS: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_ENTITLEMENTS: tvbox/tvbox-macOS.entitlements
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+      configs:
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+
+  tvbox-macOSTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    dependencies:
+      - target: tvbox-macOS
+    sources:
+      - path: tvboxTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tvbox.app.macos.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/TVBox.app/Contents/MacOS/TVBox"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+      configs:
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+
+schemes:
+  tvbox:
+    build:
+      targets:
+        tvbox: all
+        tvbox-Tests: [test]
+    test:
+      targets:
+        - tvbox-Tests
+  tvbox-macOS:
+    build:
+      targets:
+        tvbox-macOS: all
+        tvbox-macOSTests: [test]
+    test:
+      targets:
+        - tvbox-macOSTests

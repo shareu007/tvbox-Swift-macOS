@@ -1,0 +1,3 @@
+// 可公开的通用构建配置。个人签名信息由可选的本机文件覆盖。
+TVBOX_IOS_BUNDLE_ID = com.tvbox.app
+#include? "Local/Signing.xcconfig"
