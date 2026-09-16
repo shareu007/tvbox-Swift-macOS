@@ -145,6 +145,22 @@ export async function resolvePlayerResult(site, result, episodeID, fetchValue = 
   }
 }
 
+// A route can hold mutable parser state shared by its category/detail handlers.
+// Keep requests to that route ordered while allowing different sites to overlap.
+export function createSiteRequestQueue() {
+  const tails = new Map();
+  return function enqueue(siteAPI, operation) {
+    const previous = tails.get(siteAPI) || Promise.resolve();
+    const result = previous.then(operation);
+    const tail = result.then(() => {}, () => {});
+    tails.set(siteAPI, tail);
+    tail.then(() => {
+      if (tails.get(siteAPI) === tail) tails.delete(siteAPI);
+    });
+    return result;
+  };
+}
+
 async function main() {
   const bundlePath = process.argv[2];
   if (!bundlePath) throw new Error("Bundle path is required");
@@ -217,13 +233,17 @@ async function main() {
 
   const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
   const active = new Set();
+  const enqueueSiteRequest = createSiteRequestQueue();
   const maximumConcurrentRequests = 6;
   for await (const line of lines) {
     const task = (async () => {
       let message;
       try {
         message = JSON.parse(line);
-        const result = await handle(message);
+        const result = await enqueueSiteRequest(
+          message.site?.api || "__catalog__",
+          () => handle(message)
+        );
         writeLine(`${JSON.stringify({ id: message.id, ok: true, result })}\n`);
       } catch (error) {
         writeLine(`${JSON.stringify({ id: message?.id, ok: false, code: "CATVOD_ERROR", message: error.message || "CatVod execution failed" })}\n`);

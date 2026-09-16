@@ -627,6 +627,8 @@ export async function handleCloudPanAction({
     case "detail": {
       const payload = decodePayload(Array.isArray(argumentsValue.ids) ? argumentsValue.ids[0] : argumentsValue.ids);
       if (payload.provider === "quark") {
+        // A resource check must describe this share, not an automatically substituted one.
+        if (argumentsValue.verifyResource === true) return detailQuark(payload, credentials, fetchValue);
         return detailQuarkWithFallback(payload, credentials, fetchValue, searchEndpoint);
       }
       if (payload.provider === "123") return detail123(payload, fetchValue);

@@ -7,6 +7,9 @@ import AppKit
 /// 详情页 - 对应 Android 版 DetailActivity
 struct DetailView: View {
     let video: Movie.Video
+    var initialInfo: VodInfo? = nil
+    var initialInfoCheckedAt: Date? = nil
+    var preferredPlaybackFlag: String? = nil
     @StateObject private var viewModel = DetailViewModel()
     @StateObject private var sharedSystemController = SystemPlayerSessionController()
     @StateObject private var sharedVLCController = VLCPlayerController()
@@ -24,6 +27,9 @@ struct DetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
+                if viewModel.isLoading {
+                    ProgressView("正在读取剧集…").padding()
+                }
                 // 播放器区域
                 if !showFullScreen, !isFullScreenDismissing, viewModel.isPlaying, let url = viewModel.playUrl {
                     PlayerView(
@@ -103,7 +109,9 @@ struct DetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task(id: "\(video.sourceKey)-\(video.id)") {
-            await viewModel.loadDetail(video: video)
+            let freshInfo = initialInfoCheckedAt.map { Date().timeIntervalSince($0) < 60 } == true
+                ? initialInfo : nil
+            await viewModel.loadDetail(video: video, initialInfo: freshInfo)
             restorePlaybackFromHistory()
             refreshCollectState()
         }
@@ -525,11 +533,16 @@ struct DetailView: View {
     }
     
     private func restorePlaybackFromHistory() {
-        guard let playbackState = CacheStore.shared.getPlaybackState(
+        guard var playbackState = CacheStore.shared.getPlaybackState(
             vodId: video.id,
             sourceKey: video.sourceKey,
             context: modelContext
         ) else { return }
+        if let preferredPlaybackFlag,
+           initialInfoCheckedAt.map({ Date().timeIntervalSince($0) < 60 }) == true,
+           viewModel.flags.contains(preferredPlaybackFlag) {
+            playbackState.flag = preferredPlaybackFlag
+        }
         
         viewModel.applyPlaybackState(playbackState)
         lastPersistedProgress = max(playbackState.progressSeconds, 0)

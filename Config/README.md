@@ -4,7 +4,7 @@
 
 - `Templates/` 可以提交到 Git，内容只能使用空值或示例值。
 - `Local/` 已被 `.gitignore` 整目录忽略，不会上传到 GitHub。
-- `Local/TVBoxPresets.json` 保存本机的 TVBox 配置预设和接口地址。
+- `Local/TVBoxPresets.json` 保存构建时打入 App 的只读 TVBox 配置预设和接口地址。
 - `Local/Signing.xcconfig` 保存 Apple Developer Team ID 和本机专用 Bundle ID。
 - `Local/ExportOptions.plist` 保存 iOS 导出方式、Team ID 和证书名称。
 
@@ -31,7 +31,7 @@ cp Config/Templates/ExportOptions.example.plist Config/Local/ExportOptions.plist
 
 可以先运行 `./package_ios.sh --check`，只检查 iOS 平台、Team、Bundle ID、证书和导出配置，不会清理或生成安装包。
 
-Debug 构建会优先将 `Config/Local/TVBoxPresets.json` 打入 App；本机文件不存在时使用公开模板，因此公开仓库可以直接构建。用户在 App 内输入的接口和 Token 保存在系统 `UserDefaults`，不会写回仓库。
+Debug 构建会优先将 `Config/Local/TVBoxPresets.json` 作为候选配置打入 App；本机文件不存在时使用公开模板，因此公开仓库可以直接构建。用户手动输入或从候选中成功加载的接口，会加入 App 内的“我的点播配置”，并保存在用户私有的 Application Support 配置文件中；运行时不会写回 `Config/Local/` 或仓库。
 
 Release 构建默认只打入公开模板，避免上传 App/DMG 时泄露本机接口。确实要构建个人使用的 Release 时，可以显式开启：
 

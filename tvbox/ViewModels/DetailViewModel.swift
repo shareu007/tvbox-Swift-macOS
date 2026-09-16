@@ -64,15 +64,25 @@ class DetailViewModel: ObservableObject {
     private var qualityResolveToken = UUID()
     
     /// 加载视频详情
-    func loadDetail(video: Movie.Video) async {
-        guard let source = ApiConfig.shared.getSource(key: video.sourceKey)
-                ?? ApiConfig.shared.homeSourceBean else { return }
-        
+    func loadDetail(video: Movie.Video, initialInfo: VodInfo? = nil) async {
         isLoading = true
         errorMessage = nil
+        vodInfo = nil
+        defer { isLoading = false }
         
         do {
-            if let info = try await sourceService.getDetail(sourceBean: source, vodId: video.id) {
+            let detail: VodInfo?
+            if let initialInfo {
+                detail = initialInfo
+            } else {
+                guard let source = ApiConfig.shared.getSource(key: video.sourceKey) else {
+                    errorMessage = "该来源已移除，请重新搜索并选择其他资源"
+                    return
+                }
+                detail = try await sourceService.getDetail(sourceBean: source, vodId: video.id)
+            }
+            guard !Task.isCancelled else { return }
+            if let info = detail {
                 self.vodInfo = info
                 self.selectedFlag = info.playFlag
                 self.selectedEpisodeIndex = info.playIndex
@@ -82,13 +92,15 @@ class DetailViewModel: ObservableObject {
                     updateQualityOptions(for: episode.url, resetSelection: true)
                 } else {
                     resetQualityState()
+                    errorMessage = "该资源未返回剧集，请返回资源列表重试或选择其他来源"
                 }
+            } else {
+                errorMessage = "未找到资源详情，请返回资源列表选择其他来源"
             }
         } catch {
             errorMessage = error.localizedDescription
         }
         
-        isLoading = false
     }
     
     /// 选择线路

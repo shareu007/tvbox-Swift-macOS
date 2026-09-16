@@ -4,6 +4,9 @@ import SwiftUI
 struct SearchView: View {
     /// 搜索状态与结果管理。
     @StateObject private var viewModel = SearchViewModel()
+    @StateObject private var resourceChecks = ResourceListViewModel()
+    @State private var onlyPlayable = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     #if os(iOS)
     /// iOS 卡片网格参数。
@@ -59,6 +62,14 @@ struct SearchView: View {
         }
         .onDisappear {
             viewModel.cancelSearch()
+            resourceChecks.cancelChecking()
+        }
+        .onChange(of: viewModel.isSearching) { _, searching in
+            if searching { resourceChecks.cancelChecking() }
+            else if onlyPlayable { resourceChecks.startChecking(viewModel.results) }
+        }
+        .onChange(of: viewModel.results.map(\.resourceID)) { _, _ in
+            resourceChecks.retainResults(viewModel.results)
         }
     }
     
@@ -86,7 +97,7 @@ struct SearchView: View {
                 
                 if !viewModel.keyword.isEmpty {
                     Button {
-                        withAnimation {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
                             viewModel.clearSearch()
                         }
                     } label: {
@@ -127,6 +138,12 @@ struct SearchView: View {
     
     /// 搜索结果网格。
     private var searchResults: some View {
+        TimelineView(.periodic(from: .now, by: 5)) { _ in
+            searchResultsContent
+        }
+    }
+
+    private var searchResultsContent: some View {
         VStack(spacing: 0) {
             if viewModel.isSearching {
                 HStack(spacing: 8) {
@@ -142,77 +159,100 @@ struct SearchView: View {
             }
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 24) {
-                    let cloudResults = viewModel.results.filter {
-                        isCloudResult($0)
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    let groups = resourceChecks.sortedGroups(viewModel.filteredGroups, kind: viewModel.resourceKind,
+                        cloudSourceKeys: Set(ApiConfig.shared.sourceBeanList.filter(\.isSearchOnly).map(\.key))).filter { group in
+                        !onlyPlayable || playableCount(in: group) > 0
                     }
-                    let regularResults = viewModel.results.filter {
-                        !isCloudResult($0)
+                    Text("\(groups.count) 部影视 · \(groups.reduce(0) { $0 + $1.resources.count }) 个资源")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text("同一剧目的来源已汇总，抽检可用优先，检查未通过的排在最后。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    availabilityControls
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(ResourceKindFilter.allCases) { kind in
+                                Button { viewModel.resourceKind = kind } label: {
+                                    BrowseChip(title: kind.rawValue, icon: kind.icon, isSelected: viewModel.resourceKind == kind)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
-
-                    if !regularResults.isEmpty {
-                        resultSection(
-                            title: "在线影视",
-                            subtitle: "\(regularResults.count) 个结果",
-                            icon: "play.rectangle.fill",
-                            videos: regularResults
-                        )
+                    if groups.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "line.3.horizontal.decrease.circle").font(.largeTitle)
+                            Text(resourceChecks.isChecking ? "正在逐个抽检，可用结果会陆续出现…" : (onlyPlayable ? "尚无抽检通过的资源，可检查资源或查看待确认来源" : "当前没有这类资源"))
+                            Button("查看全部") {
+                                viewModel.resourceKind = .all
+                                onlyPlayable = false
+                            }
+                        }
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
                     }
-                    if !cloudResults.isEmpty {
-                        resultSection(
-                            title: "网盘分享",
-                            subtitle: "\(cloudResults.count) 个分享 · 夸克支持清晰度选择",
-                            icon: "externaldrive.fill",
-                            videos: cloudResults
-                        )
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(groups) { group in
+                            NavigationLink(value: group) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    VodCardView(video: group.poster)
+                                    let count = playableCount(in: group)
+                                    Text(count > 0 ? "\(count) 个抽检可用" : "待确认播放")
+                                        .font(.caption)
+                                        .foregroundStyle(count > 0 ? Color.green : Color.secondary)
+                                }
+                            }
+                            #if os(iOS)
+                            .buttonStyle(VodCardPressStyle())
+                            #else
+                            .buttonStyle(.plain)
+                            #endif
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
             }
         }
-        .navigationDestination(for: Movie.Video.self) { video in
-            DetailView(video: video)
+        .navigationDestination(for: SearchResultGroup.self) { selected in
+            // 慢源补充年份后分组 ID 可能变化，通过原始资源继续定位当前剧目。
+            let current = viewModel.groupedResults.first {
+                $0.resources.contains { $0.resourceID == selected.resources.first?.resourceID }
+            } ?? selected
+            ResourceListView(group: current, viewModel: resourceChecks, initialStatus: onlyPlayable ? .playable : .all, initialKind: viewModel.resourceKind)
         }
     }
 
-    private func isCloudResult(_ video: Movie.Video) -> Bool {
-        if video.sourceKey == SourceBean.cloudPanKey {
-            return true
-        }
-        return ApiConfig.shared.getSource(key: video.sourceKey)?.isSearchOnly == true
+    private func playableCount(in group: SearchResultGroup) -> Int {
+        resourceChecks.playableCount(in: group.resources, kind: viewModel.resourceKind,
+                                     cloudSourceKeys: Set(ApiConfig.shared.sourceBeanList.filter(\.isSearchOnly).map(\.key)))
     }
 
-    private func resultSection(
-        title: String,
-        subtitle: String,
-        icon: String,
-        videos: [Movie.Video]
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .foregroundColor(.orange)
-                Text(title)
-                    .font(.headline)
-                    .foregroundColor(.white)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(videos) { video in
-                    NavigationLink(value: video) {
-                        VodCardView(video: video)
-                    }
-                    #if os(iOS)
-                    .buttonStyle(VodCardPressStyle())
-                    #else
-                    .buttonStyle(.plain)
-                    #endif
+    private var availabilityControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("只看抽检可用", isOn: $onlyPlayable)
+                .tint(.orange)
+                .onChange(of: onlyPlayable) { _, enabled in
+                    if enabled && !viewModel.isSearching { resourceChecks.startChecking(viewModel.results) }
+                }
+            HStack {
+                if resourceChecks.isChecking {
+                    ProgressView().controlSize(.small)
+                    Text("已检查 \(resourceChecks.completedCount)/\(resourceChecks.totalCount)").font(.caption)
+                    Spacer()
+                    Button("停止") { resourceChecks.cancelChecking() }
+                } else {
+                    Text("抽检首集媒体；网盘及特殊解析来源需播放确认")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("检查资源") { resourceChecks.startChecking(viewModel.results, refresh: true) }
+                        .disabled(viewModel.isSearching)
                 }
             }
+            .frame(minHeight: 32)
         }
     }
     

@@ -5,10 +5,12 @@ import SwiftUI
 #if os(iOS)
 /// 按压缩放动画样式 - 为 VodCard 提供触觉反馈式的按压效果
 struct VodCardPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 #endif
@@ -17,6 +19,7 @@ struct VodCardPressStyle: ButtonStyle {
 struct VodCardView: View {
     /// 卡片对应的视频数据。
     let video: Movie.Video
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 悬停状态（主要用于 macOS 悬停放大动效）。
     @State private var isHovered = false
     
@@ -24,15 +27,18 @@ struct VodCardView: View {
         VStack(alignment: .leading, spacing: 10) {
             // 封面图
             ZStack(alignment: .bottomLeading) {
-                CachedAsyncImage(url: URL.posterURL(from: video.pic)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(2/3, contentMode: .fill)
-                } placeholder: {
-                    placeholderImage
-                        .overlay(ProgressView().tint(.white))
+                GeometryReader { geometry in
+                    CachedAsyncImage(url: URL.posterURL(from: video.pic)) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(2/3, contentMode: .fill)
+                    } placeholder: {
+                        placeholderImage
+                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
                 }
-                .frame(maxWidth: .infinity)
+                .aspectRatio(2/3, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardRadius))
                 .shadow(color: .black.opacity(0.4), radius: 8, x: 0, y: 4)
                 
@@ -49,6 +55,7 @@ struct VodCardView: View {
                 // 备注标签
                 if !video.note.isEmpty {
                     Text(video.note)
+                        .lineLimit(1)
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
@@ -60,8 +67,8 @@ struct VodCardView: View {
                 }
             }
             // 悬停缩放只增强视觉反馈，不影响点击命中区域。
-            .scaleEffect(isHovered ? 1.05 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isHovered)
+            .scaleEffect(isHovered && !reduceMotion ? 1.025 : 1.0)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isHovered)
             .onHover { hovering in
                 isHovered = hovering
             }
@@ -71,7 +78,7 @@ struct VodCardView: View {
                 Text(video.name)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
-                    .lineLimit(1)
+                    .lineLimit(2, reservesSpace: true)
                 
                 if !video.type.isEmpty {
                     Text(video.type)

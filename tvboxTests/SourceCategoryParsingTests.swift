@@ -2,6 +2,19 @@ import XCTest
 @testable import TVBox
 
 final class SourceCategoryParsingTests: XCTestCase {
+    func testFilterParsingPreservesNumericValuesAndRemovesDuplicateOptions() {
+        let object: [String: Any] = ["filters": ["drama": [
+            ["key": "year", "name": "年份", "value": [
+                ["n": "全部", "v": ""], ["n": "2024", "v": 2024], ["n": "重复", "v": "2024"]
+            ]],
+            ["key": "year", "name": "重复", "value": [["n": "2023", "v": "2023"]]],
+            ["key": "area", "value": [["n": "缺少参数"]]]
+        ]]]
+        let categories = SourceService.categoriesWithFilters([.init(id: "drama", name: "电视剧")], object: object)
+        XCTAssertEqual(categories[0].filters.count, 1)
+        XCTAssertEqual(categories[0].filters[0].values.map(\.v), ["", "2024"])
+    }
+
     func testParentCategoriesWithChildrenAreNotShownAsPlayableCategories() {
         let categories: [[String: Any]] = [
             ["type_id": 1, "type_pid": 0, "type_name": "电影片"],

@@ -82,7 +82,8 @@ struct Movie: Codable {
             self.name = (try? container.decode(String.self, forKey: .name)) ?? ""
             self.pic = (try? container.decode(String.self, forKey: .pic)) ?? ""
             self.note = (try? container.decode(String.self, forKey: .note)) ?? ""
-            self.year = (try? container.decode(String.self, forKey: .year)) ?? ""
+            self.year = (try? container.decode(String.self, forKey: .year))
+                ?? (try? container.decode(Int.self, forKey: .year)).map(String.init) ?? ""
             self.area = (try? container.decode(String.self, forKey: .area)) ?? ""
             self.type = (try? container.decode(String.self, forKey: .type)) ?? ""
             self.director = (try? container.decode(String.self, forKey: .director)) ?? ""

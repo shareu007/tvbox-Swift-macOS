@@ -16,14 +16,14 @@ struct ContentView: View {
     @StateObject private var settingsVM = SettingsViewModel()
     /// 当前主标签索引。
     @State private var selectedTab = 0
-    /// 预留：控制首次配置页显隐（当前逻辑由 `appState.isConfigLoaded` 驱动）。
+    /// 已配置用户主动修改接口时显示输入页。
     @State private var showSetup = false
     /// 首次配置页历史回填目标输入框。
     @State private var setupInputTarget: ApiInputTarget = .vod
     
     var body: some View {
         Group {
-            if appState.isConfigLoaded {
+            if appState.shouldShowMainInterface && !showSetup {
                 mainTabView
             } else {
                 setupView
@@ -34,22 +34,8 @@ struct ContentView: View {
             networkStatusBanner
         }
         .preferredColorScheme(.dark)
-        .onAppear {
-            // 自动加载已保存的配置
-            let savedVodUrl = PrivateSettingsStore.value(
-                for: .vodURL,
-                migratingLegacyKey: HawkConfig.API_URL
-            )
-            let savedLiveUrl = PrivateSettingsStore.value(
-                for: .liveURL,
-                migratingLegacyKey: HawkConfig.LIVE_API_URL
-            )
-            if !savedVodUrl.isEmpty {
-                // 启动自动恢复配置，避免每次重启都回到首次配置页。
-                Task {
-                    await appState.loadConfig(vodUrl: savedVodUrl, liveUrl: savedLiveUrl)
-                }
-            }
+        .task {
+            await appState.restoreSavedConfigurationIfNeeded()
         }
     }
     
@@ -68,6 +54,7 @@ struct ContentView: View {
                         await settingsVM.selectPendingMultiRepoOption(option)
                         if settingsVM.configSuccess {
                             appState.applyLoadedConfigState()
+                            showSetup = false
                         }
                     }
                 },
@@ -84,21 +71,21 @@ struct ContentView: View {
     private var mainTabView: some View {
         #if os(iOS)
         TabView(selection: $selectedTab) {
-            HomeView()
+            configurationContent { HomeView() }
                 .tabItem {
                     Label("首页", systemImage: "house.fill")
                 }
                 .tag(0)
             
-            LiveView(onExit: {
-                selectedTab = 0
-            })
+            configurationContent {
+                LiveView(onExit: { selectedTab = 0 })
+            }
                 .tabItem {
                     Label("直播", systemImage: "tv.fill")
                 }
                 .tag(1)
             
-            SearchView()
+            configurationContent { SearchView() }
                 .tabItem {
                     Label("搜索", systemImage: "magnifyingglass")
                 }
@@ -134,9 +121,9 @@ struct ContentView: View {
             .listStyle(.sidebar)
         } detail: {
             switch selectedTab {
-            case 0: HomeView()
-            case 1: LiveView()
-            case 2: SearchView()
+            case 0: configurationContent { HomeView() }
+            case 1: configurationContent { LiveView() }
+            case 2: configurationContent { SearchView() }
             case 3:
                 NavigationStack {
                     FavoritesView()
@@ -146,12 +133,26 @@ struct ContentView: View {
                 NavigationStack {
                     HistoryView()
                 }
-            default: HomeView()
+            default: configurationContent { HomeView() }
             }
         }
         #endif
     }
     
+    /// 已保存接口的用户先进入主界面，等配置恢复成功再创建依赖来源的页面。
+    @ViewBuilder
+    private func configurationContent<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        if appState.isConfigLoaded {
+            content()
+        } else {
+            ConfigRestoreView(error: appState.configLoadError, isLoading: appState.isLoadingConfig) {
+                Task { await appState.retryConfig() }
+            } edit: {
+                showSetup = true
+            }
+        }
+    }
+
     // MARK: - 首次配置页面
     
     /// 首次启动或未加载配置时的引导页面。
@@ -185,6 +186,11 @@ struct ContentView: View {
             
             ScrollView {
                 VStack(spacing: 32) {
+                    if appState.shouldShowMainInterface {
+                        Button("返回首页") { showSetup = false }
+                            .buttonStyle(.plain).foregroundStyle(.orange)
+                            .padding(.top, 20)
+                    }
                     // Logo 区域
                     VStack(spacing: 20) {
                         ZStack {
@@ -285,6 +291,7 @@ struct ContentView: View {
                                 await settingsVM.loadConfig()
                                 if settingsVM.configSuccess {
                                     appState.applyLoadedConfigState()
+                                    showSetup = false
                                 }
                             }
                         } label: {
@@ -404,5 +411,36 @@ struct ContentView: View {
         // macOS 下通过 NSPasteboard 读取纯文本。
         NSPasteboard.general.string(forType: .string)
         #endif
+    }
+}
+
+
+/// 配置恢复状态显示在首页内部，不再短暂展示首次使用表单。
+struct ConfigRestoreView: View {
+    let error: String?
+    let isLoading: Bool
+    let retry: () -> Void
+    let edit: () -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: error == nil ? "play.tv.fill" : "wifi.exclamationmark")
+                .font(.system(size: 42)).foregroundStyle(.orange)
+            if let error, !isLoading {
+                Text("暂时无法加载已保存的接口").font(.headline)
+                Text(error).font(.callout).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center).textSelection(.enabled)
+                HStack(spacing: 16) {
+                    Button("重试", action: retry).buttonStyle(.borderedProminent).tint(.orange)
+                    Button("修改接口", action: edit).buttonStyle(.bordered)
+                }
+            } else {
+                ProgressView("正在加载首页…")
+                Text("正在恢复已保存的接口").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.primaryGradient)
     }
 }

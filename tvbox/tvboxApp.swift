@@ -47,7 +47,7 @@ struct tvboxApp: App {
 class AppState: ObservableObject {
     /// 解析后的配置单例，提供给所有页面与 ViewModel 使用。
     @Published var apiConfig = ApiConfig.shared
-    /// 配置是否已经成功加载。控制 `ContentView` 显示主界面或首次配置页。
+    /// 配置是否已经成功加载；配置依赖页面在成功后才开始请求内容。
     @Published var isConfigLoaded = false
     /// 当前首页选中的视频源 key（用于跨页面同步）。
     @Published var currentSourceKey: String = ""
@@ -55,6 +55,7 @@ class AppState: ObservableObject {
     @Published var configLoadError: String?
     /// 是否正在重试加载配置。
     @Published var isRetryingConfig = false
+    @Published private(set) var isLoadingConfig = false
     
     #if os(macOS)
     /// macOS 三栏布局可见性（侧栏/内容/详情）。
@@ -68,8 +69,47 @@ class AppState: ObservableObject {
     private var lastLiveUrl: String = ""
     private var networkRestoredCancellable: AnyCancellable?
     
-    init() {
+    typealias ConfigLoader = @MainActor (String, String) async throws -> Void
+    private let configLoader: ConfigLoader
+    private let savedConfiguration: (vodURL: String, liveURL: String)
+    private var didAttemptStartupRestore = false
+    private var configRequestID = UUID()
+
+    /// 同步读取的保存状态决定首帧路由，不能等远程接口返回后才离开引导页。
+    var shouldShowMainInterface: Bool { isConfigLoaded || !savedConfiguration.vodURL.isEmpty }
+
+    init(
+        savedConfiguration: (vodURL: String, liveURL: String)? = nil,
+        configLoader: @escaping ConfigLoader = { vod, live in
+            try await ApiConfig.shared.loadConfigs(vodApiUrl: vod, liveApiUrl: live)
+        }
+    ) {
+        let saved = savedConfiguration ?? (
+            PrivateSettingsStore.value(for: .vodURL, migratingLegacyKey: HawkConfig.API_URL),
+            PrivateSettingsStore.value(for: .liveURL, migratingLegacyKey: HawkConfig.LIVE_API_URL)
+        )
+        self.savedConfiguration = (
+            saved.0.trimmingCharacters(in: .whitespacesAndNewlines),
+            saved.1.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        self.configLoader = configLoader
         setupNetworkRestoredAutoRetry()
+    }
+
+    /// 根视图可能多次出现，同一 AppState 只自动恢复一次；取消后允许再次恢复。
+    func restoreSavedConfigurationIfNeeded() async {
+        guard !didAttemptStartupRestore, !isConfigLoaded, !isLoadingConfig,
+              !savedConfiguration.vodURL.isEmpty else { return }
+        didAttemptStartupRestore = true
+        await loadConfig(vodUrl: savedConfiguration.vodURL, liveUrl: savedConfiguration.liveURL)
+        if Task.isCancelled, !isConfigLoaded { didAttemptStartupRestore = false }
+    }
+
+    func retryConfig() async {
+        guard !isLoadingConfig, !lastVodUrl.isEmpty else { return }
+        isRetryingConfig = true
+        defer { isRetryingConfig = false }
+        await loadConfig(vodUrl: lastVodUrl, liveUrl: lastLiveUrl)
     }
     
     /// 仅提供点播地址时的快捷加载入口（直播地址默认与点播一致）。
@@ -87,14 +127,21 @@ class AppState: ObservableObject {
         guard !trimmedVod.isEmpty else { return }
         let resolvedLive = trimmedLive.isEmpty ? trimmedVod : trimmedLive
         
+        let requestID = UUID()
+        configRequestID = requestID
         lastVodUrl = trimmedVod
         lastLiveUrl = resolvedLive
         configLoadError = nil
+        isLoadingConfig = true
+        defer { if configRequestID == requestID { isLoadingConfig = false } }
         
         do {
-            try await ApiConfig.shared.loadConfigs(vodApiUrl: trimmedVod, liveApiUrl: resolvedLive)
+            try await configLoader(trimmedVod, resolvedLive)
+            try Task.checkCancellation()
+            guard configRequestID == requestID else { return }
             applyLoadedConfigState()
         } catch {
+            guard configRequestID == requestID, !Task.isCancelled else { return }
             if !(error is CancellationError) {
                 configLoadError = error.localizedDescription
             }
@@ -104,6 +151,8 @@ class AppState: ObservableObject {
     /// 将"配置已加载"的统一状态写回全局。
     /// 该方法会在设置页和启动自动加载两个入口中复用。
     func applyLoadedConfigState() {
+        configRequestID = UUID()
+        isLoadingConfig = false
         isConfigLoaded = true
         configLoadError = nil
         currentSourceKey = ApiConfig.shared.homeSourceBean?.key ?? ""
@@ -115,10 +164,8 @@ class AppState: ObservableObject {
             .sink { [weak self] in
                 guard let self else { return }
                 Task { @MainActor [weak self] in
-                    guard let self, !self.isConfigLoaded, !self.lastVodUrl.isEmpty else { return }
-                    self.isRetryingConfig = true
-                    await self.loadConfig(vodUrl: self.lastVodUrl, liveUrl: self.lastLiveUrl)
-                    self.isRetryingConfig = false
+                    guard let self, !self.isConfigLoaded else { return }
+                    await self.retryConfig()
                 }
             }
     }

@@ -185,9 +185,10 @@ final class SpiderGatewayService {
         return parseVideos(object, sourceKey: source.key)
     }
 
-    func detail(source: SourceBean, id: String) async throws -> VodInfo? {
+    func detail(source: SourceBean, id: String, verifyResource: Bool = false) async throws -> VodInfo? {
         let object = try await invoke(source: source, action: "detail", arguments: [
-            "ids": .array([.string(id)])
+            "ids": .array([.string(id)]),
+            "verifyResource": .bool(verifyResource)
         ])
         guard let first = (object["list"] as? [[String: Any]])?.first,
               let data = try? JSONSerialization.data(withJSONObject: first),
@@ -321,7 +322,7 @@ final class SpiderGatewayService {
 
     private func parseSorts(_ object: [String: Any]) -> [MovieSort.SortData] {
         guard let values = object["class"] as? [[String: Any]] else { return [] }
-        return SourceService.leafCategories(from: values)
+        return SourceService.categoriesWithFilters(SourceService.leafCategories(from: values), object: object)
     }
 
     private func parseVideos(_ object: [String: Any], sourceKey: String) -> [Movie.Video] {

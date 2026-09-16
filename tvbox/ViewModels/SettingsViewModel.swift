@@ -46,6 +46,10 @@ class SettingsViewModel: ObservableObject {
     @Published var pendingMultiRepoSelection: PendingMultiRepoSelection?
     /// 最近输入过的 API 历史。
     @Published var apiHistory: [String] = []
+    /// 用户成功加载过的点播配置列表，保存在本机私有设置文件中。
+    @Published var savedVodConfigs: [SavedVodConfig] = []
+    /// 最近一次配置协议与兼容性检测结果。
+    @Published var configInspectionResult: VodConfigInspectionResult?
     /// 点播播放器内核选择。
     @Published var vodPlayerEngine: PlayerEngine = .system
     /// 直播播放器内核选择。
@@ -67,8 +71,20 @@ class SettingsViewModel: ObservableObject {
     let decodeModeOptions: [VideoDecodeMode] = VideoDecodeMode.allCases
     /// VLC 缓冲模式候选。
     let vlcBufferModeOptions: [VLCBufferMode] = VLCBufferMode.allCases
-    /// 内置 TVBox 配置预设，包含纯 Swift 兼容性说明。
+    /// 随当前构建打包的候选配置；成功加载后也会加入用户的点播配置列表。
     let configPresets: [TVBoxConfigPreset] = TVBoxConfigPreset.all
+    /// 多仓库选择前记录是否需要在最终加载后展示检测结果。
+    private var presentsInspectionAfterPendingSelection = false
+
+    /// 当前点播地址匹配到的用户配置。
+    var selectedSavedVodConfig: SavedVodConfig? {
+        Self.matchingSavedConfig(for: vodApiUrl, in: savedVodConfigs)
+    }
+
+    /// 设置页展示的当前点播配置名称。
+    var currentVodConfigLabel: String {
+        selectedSavedVodConfig?.name ?? (vodApiUrl.isEmpty ? "未配置" : "未加入列表")
+    }
     
     /// 初始化时完成三件事：
     /// 1) 回填已保存的配置地址
@@ -87,6 +103,7 @@ class SettingsViewModel: ObservableObject {
             for: .liveURL,
             migratingLegacyKey: HawkConfig.LIVE_API_URL
         )
+        loadSavedVodConfigs(migratingCurrentURL: savedVod)
         loadApiHistory()
         let hasLegacyPlayer = defaults.object(forKey: HawkConfig.PLAY_TYPE) != nil
         let legacyPlayerRaw = defaults.integer(forKey: HawkConfig.PLAY_TYPE)
@@ -140,7 +157,7 @@ class SettingsViewModel: ObservableObject {
     }
     
     /// 加载配置
-    func loadConfig() async {
+    func loadConfig(presentInspection: Bool = false) async {
         let trimmedVod = vodApiUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedLive = liveApiUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedVod.isEmpty else {
@@ -161,6 +178,7 @@ class SettingsViewModel: ObservableObject {
                 vodUrl: trimmedVod,
                 liveUrl: resolvedLive
             ) {
+                presentsInspectionAfterPendingSelection = presentInspection
                 pendingMultiRepoSelection = pending
                 isLoadingConfig = false
                 return
@@ -182,6 +200,18 @@ class SettingsViewModel: ObservableObject {
             liveApiUrl = trimmedLive
             addToApiHistory(trimmedVod)
             addToApiHistory(resolvedLive)
+            let inspection = Self.inspectLoadedConfig(
+                entryURL: trimmedVod,
+                sources: ApiConfig.shared.sourceBeanList
+            )
+            do {
+                try saveLoadedVodConfig(url: trimmedVod, inspection: inspection)
+                if presentInspection {
+                    configInspectionResult = inspection
+                }
+            } catch {
+                configError = "配置已加载，但无法保存到我的配置：\(error.localizedDescription)"
+            }
             configSuccess = true
         } catch {
             configError = error.localizedDescription
@@ -190,12 +220,125 @@ class SettingsViewModel: ObservableObject {
         isLoadingConfig = false
     }
 
-    /// 选择兼容的配置预设并立即加载；直播地址留空表示跟随预设配置。
+    /// 选择候选配置并立即加载；成功后自动加入“我的点播配置”。
+    /// 若加载失败，则恢复进入候选前的输入，避免未生效地址伪装成当前配置。
     func loadPreset(_ preset: TVBoxConfigPreset) async {
         guard preset.compatibility.isSelectable else { return }
+        let previousVodUrl = vodApiUrl
+        let previousLiveUrl = liveApiUrl
         vodApiUrl = preset.url
         liveApiUrl = ""
-        await loadConfig()
+        await loadConfig(presentInspection: true)
+        if !configSuccess, pendingMultiRepoSelection == nil {
+            vodApiUrl = previousVodUrl
+            liveApiUrl = previousLiveUrl
+        }
+    }
+
+    /// 切换到用户已保存的点播配置。
+    func loadSavedVodConfig(_ config: SavedVodConfig) async {
+        let previousVodUrl = vodApiUrl
+        let previousLiveUrl = liveApiUrl
+        vodApiUrl = config.url
+        liveApiUrl = ""
+        await loadConfig(presentInspection: true)
+        if !configSuccess, pendingMultiRepoSelection == nil {
+            vodApiUrl = previousVodUrl
+            liveApiUrl = previousLiveUrl
+        }
+    }
+
+    /// 从“我的点播配置”移除一项；不会中断当前已经加载的播放配置。
+    func removeSavedVodConfig(_ config: SavedVodConfig) {
+        let previousConfigs = savedVodConfigs
+        savedVodConfigs.removeAll { $0.id == config.id }
+        do {
+            try persistSavedVodConfigs()
+            configError = nil
+        } catch {
+            savedVodConfigs = previousConfigs
+            configError = error.localizedDescription
+        }
+    }
+
+    /// 用规范化后的 URL 判断当前地址是否来自某个构建候选。
+    static func matchingPreset(
+        for url: String,
+        in presets: [TVBoxConfigPreset]
+    ) -> TVBoxConfigPreset? {
+        let normalizedURL = ApiConfig.normalizeConfigUrl(url)
+        guard !normalizedURL.isEmpty else { return nil }
+        return presets.first {
+            ApiConfig.normalizeConfigUrl($0.url) == normalizedURL
+        }
+    }
+
+    /// 用规范化后的 URL 判断当前地址是否已保存在用户配置列表。
+    static func matchingSavedConfig(
+        for url: String,
+        in configs: [SavedVodConfig]
+    ) -> SavedVodConfig? {
+        let normalizedURL = ApiConfig.normalizeConfigUrl(url)
+        guard !normalizedURL.isEmpty else { return nil }
+        return configs.first {
+            ApiConfig.normalizeConfigUrl($0.url) == normalizedURL
+        }
+    }
+
+    /// 根据已解析出的站点类型生成协议和兼容性结论。
+    static func inspectLoadedConfig(
+        entryURL: String,
+        sources: [SourceBean]
+    ) -> VodConfigInspectionResult {
+        let configurationProtocol = inferredConfigurationProtocol(for: entryURL)
+        let pointSources = sources.filter { !$0.isSearchOnly }
+        let sourceProtocols = Array(Set(pointSources.map(\.typeDescription))).sorted()
+        let supportedCount = pointSources.filter(\.isSupportedInSwift).count
+        let compatibility: SavedVodConfig.Compatibility
+        if pointSources.isEmpty || supportedCount == 0 {
+            compatibility = .incompatible
+        } else if supportedCount == pointSources.count {
+            compatibility = .compatible
+        } else {
+            compatibility = .partial
+        }
+        return VodConfigInspectionResult(
+            configurationProtocol: configurationProtocol,
+            sourceProtocols: sourceProtocols,
+            compatibility: compatibility,
+            supportedSourceCount: supportedCount,
+            totalSourceCount: pointSources.count
+        )
+    }
+
+    /// 无需发起网络请求即可识别的配置入口协议。
+    static func inferredConfigurationProtocol(for entryURL: String) -> String {
+        SpiderGatewayService.isCatVodBundleURL(entryURL)
+            ? "CatVod JavaScript"
+            : "TVBox JSON"
+    }
+
+    /// 设置页出现时，用当前已经加载完成的数据补齐旧配置的协议和适配状态。
+    func refreshCurrentVodConfigInspectionIfAvailable() {
+        let apiConfig = ApiConfig.shared
+        let normalizedCurrent = ApiConfig.normalizeConfigUrl(vodApiUrl)
+        let normalizedLoaded = ApiConfig.normalizeConfigUrl(apiConfig.configUrl)
+        guard apiConfig.isLoaded,
+              !normalizedCurrent.isEmpty,
+              normalizedCurrent == normalizedLoaded else {
+            return
+        }
+
+        let inspection = Self.inspectLoadedConfig(
+            entryURL: vodApiUrl,
+            sources: apiConfig.sourceBeanList
+        )
+        do {
+            try saveLoadedVodConfig(url: vodApiUrl, inspection: inspection)
+            configError = nil
+        } catch {
+            configError = "无法更新点播配置状态：\(error.localizedDescription)"
+        }
     }
     
     /// 处理多仓库弹窗选择结果，并继续走统一加载流程。
@@ -218,12 +361,15 @@ class SettingsViewModel: ObservableObject {
         }
         
         pendingMultiRepoSelection = nil
-        await loadConfig()
+        let presentInspection = presentsInspectionAfterPendingSelection
+        presentsInspectionAfterPendingSelection = false
+        await loadConfig(presentInspection: presentInspection)
     }
     
     /// 取消多仓库选择，恢复到普通待输入状态。
     func cancelPendingMultiRepoSelection() {
         pendingMultiRepoSelection = nil
+        presentsInspectionAfterPendingSelection = false
         isLoadingConfig = false
     }
     
@@ -264,6 +410,78 @@ class SettingsViewModel: ObservableObject {
         return nil
     }
     
+    // MARK: - 用户点播配置
+
+    /// 读取用户配置列表，并把升级前已经保存的当前点播地址纳入列表。
+    private func loadSavedVodConfigs(migratingCurrentURL currentURL: String) {
+        let stored = PrivateSettingsStore.value(for: .savedVodConfigs)
+        savedVodConfigs = SavedVodConfig.decode(from: stored)
+            .sorted { $0.lastUsedAt > $1.lastUsedAt }
+
+        let trimmedURL = currentURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedURL.isEmpty else { return }
+
+        var needsPersistence = false
+        for index in savedVodConfigs.indices
+        where ["待检测", "待重新加载检测"].contains(
+            savedVodConfigs[index].configurationProtocol
+        ) {
+            savedVodConfigs[index].configurationProtocol = Self.inferredConfigurationProtocol(
+                for: savedVodConfigs[index].url
+            )
+            needsPersistence = true
+        }
+
+        if Self.matchingSavedConfig(for: trimmedURL, in: savedVodConfigs) == nil {
+            savedVodConfigs.insert(
+                SavedVodConfig(
+                    name: SavedVodConfig.displayName(for: trimmedURL),
+                    url: trimmedURL,
+                    configurationProtocol: Self.inferredConfigurationProtocol(for: trimmedURL),
+                    compatibility: .unknown
+                ),
+                at: 0
+            )
+            needsPersistence = true
+        }
+
+        if needsPersistence {
+            try? persistSavedVodConfigs()
+        }
+    }
+
+    /// 新增或更新配置检测信息，并将最近使用项放到列表首位。
+    private func saveLoadedVodConfig(
+        url: String,
+        inspection: VodConfigInspectionResult
+    ) throws {
+        let existing = Self.matchingSavedConfig(for: url, in: savedVodConfigs)
+        let item = SavedVodConfig(
+            id: existing?.id ?? UUID(),
+            name: existing?.name ?? SavedVodConfig.displayName(for: url),
+            url: url,
+            configurationProtocol: inspection.configurationProtocol,
+            sourceProtocols: inspection.sourceProtocols,
+            compatibility: inspection.compatibility,
+            supportedSourceCount: inspection.supportedSourceCount,
+            totalSourceCount: inspection.totalSourceCount,
+            lastUsedAt: Date()
+        )
+        savedVodConfigs.removeAll {
+            ApiConfig.normalizeConfigUrl($0.url) == ApiConfig.normalizeConfigUrl(url)
+        }
+        savedVodConfigs.insert(item, at: 0)
+        if savedVodConfigs.count > 30 {
+            savedVodConfigs = Array(savedVodConfigs.prefix(30))
+        }
+        try persistSavedVodConfigs()
+    }
+
+    private func persistSavedVodConfigs() throws {
+        let encoded = try SavedVodConfig.encode(savedVodConfigs)
+        try PrivateSettingsStore.save(encoded, for: .savedVodConfigs)
+    }
+
     // MARK: - API 历史
     
     /// 读取 API 历史。

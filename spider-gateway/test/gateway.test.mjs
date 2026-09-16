@@ -12,7 +12,7 @@ import { JarCache } from "../src/jar-cache.mjs";
 import { isPrivateAddress, parseJarReference } from "../src/jar-reference.mjs";
 import { NodeBundleCache } from "../src/node-bundle-cache.mjs";
 import { createGateway } from "../src/server.mjs";
-import { actionRequest, normalizePlayerResult, patchBundle, resolvePlayerResult } from "../src/catvod-runner.mjs";
+import { actionRequest, createSiteRequestQueue, normalizePlayerResult, patchBundle, resolvePlayerResult } from "../src/catvod-runner.mjs";
 import {
   CatVodManager,
   catVodFilePermissionArguments,
@@ -1025,4 +1025,31 @@ test("Gateway rejects unauthorized and malformed requests", async (t) => {
   const unsafe = await post(url, unsafeRoute);
   assert.equal(unsafe.status, 400);
   assert.equal(unsafe.body.code, "UNSUPPORTED_API");
+});
+
+
+test("CatVod recommendations cannot mix categories through shared parser state", async () => {
+  const enqueue = createSiteRequestQueue();
+  let parserCategory;
+  const categories = ["movie", "drama", "animation"];
+  const results = await Promise.all(categories.map((category) => enqueue("/spider/demo/3", async () => {
+    parserCategory = category;
+    await Promise.resolve();
+    return { list: [{ type_name: parserCategory }] };
+  })));
+  assert.deepEqual(results.map((result) => result.list[0].type_name), categories);
+});
+
+test("CatVod site queue keeps other sources responsive and recovers after failure", async () => {
+  const enqueue = createSiteRequestQueue();
+  let release;
+  const blocked = enqueue("/spider/slow/3", () => new Promise((resolve) => { release = resolve; }));
+  const fast = enqueue("/spider/fast/3", async () => "fast");
+  assert.equal(await fast, "fast");
+  release("slow");
+  assert.equal(await blocked, "slow");
+  const failed = enqueue("/spider/slow/3", async () => { throw new Error("fixture failure"); });
+  const recovered = enqueue("/spider/slow/3", async () => "recovered");
+  await assert.rejects(failed, /fixture failure/);
+  assert.equal(await recovered, "recovered");
 });

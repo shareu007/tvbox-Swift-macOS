@@ -7,7 +7,17 @@ class SearchViewModel: ObservableObject {
     /// 搜索关键词输入。
     @Published var keyword: String = ""
     /// 当前结果列表。
-    @Published var results: [Movie.Video] = []
+    @Published var results: [Movie.Video] = [] {
+        didSet { groupedResults = SearchResultGroup.aggregate(results) }
+    }
+    @Published private(set) var groupedResults: [SearchResultGroup] = []
+    @Published var resourceKind: ResourceKindFilter = .all
+    var filteredGroups: [SearchResultGroup] {
+        let cloudKeys = Set(ApiConfig.shared.sourceBeanList.filter(\.isSearchOnly).map(\.key))
+        return groupedResults.filter { group in
+            group.resources.contains { resourceKind.includes($0, cloudSourceKeys: cloudKeys) }
+        }
+    }
     /// 搜索加载状态，用于控制进度指示器。
     @Published var isSearching = false
     /// 本地搜索历史（最近在前）。
@@ -46,6 +56,7 @@ class SearchViewModel: ObservableObject {
         isSearching = true
         errorMessage = nil
         results = []
+        resourceKind = .all
         
         // 搜索一旦触发就先落历史，保持行为与移动端常见搜索体验一致。
         addToHistory(trimmed)

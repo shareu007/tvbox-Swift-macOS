@@ -116,9 +116,15 @@ export function parseFunletuSearchJSON(body) {
   const seen = new Set();
   for (const row of rows) {
     if (row?.valid !== undefined && Number(row.valid) !== 0) continue;
-    const rawURL = String(row?.url || "").split("?")[0];
+    // Tracking parameters can be discarded, but pwd is required to open protected shares.
+    let rawURL = String(row?.url || "");
+    try {
+      const url = new URL(rawURL);
+      url.searchParams.delete("entry");
+      rawURL = url.toString();
+    } catch { /* Malformed entries are ignored by pushCloudResult. */ }
     const note = row?.title || row?.filename || row?.name || row?.updatetime || "趣盘搜资源";
-    pushCloudResult(values, seen, rawURL, note);
+    pushCloudResult(values, seen, rawURL, note, row?.password || row?.share_code || "");
   }
   return values.slice(0, 80);
 }

@@ -119,7 +119,7 @@ class SourceService {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 // 解析分类
                 if let classList = json["class"] as? [[String: Any]] {
-                    sorts = Self.leafCategories(from: classList)
+                    sorts = Self.categoriesWithFilters(Self.leafCategories(from: classList), object: json)
                 }
                 
                 // 解析首页推荐视频
@@ -165,6 +165,30 @@ class SourceService {
         if let value = value as? String { return value }
         if let value = value as? NSNumber { return value.stringValue }
         return ""
+    }
+
+    /// TVBox 的筛选值可能是数字；保留接口参数，并去掉会造成重复控件的键和值。
+    static func categoriesWithFilters(_ categories: [MovieSort.SortData], object: [String: Any]) -> [MovieSort.SortData] {
+        let filtersByID = object["filters"] as? [String: Any] ?? [:]
+        return categories.map { category in
+            var category = category
+            var keys = Set<String>()
+            category.filters = (filtersByID[category.id] as? [[String: Any]] ?? []).compactMap { raw in
+                let key = flexibleString(raw["key"])
+                guard !key.isEmpty, keys.insert(key).inserted else { return nil }
+                var values = Set<String>()
+                let options = (raw["value"] as? [[String: Any]] ?? []).compactMap { option -> MovieSort.SortFilter.SortFilterValue? in
+                    guard option["v"] != nil else { return nil }
+                    let value = flexibleString(option["v"])
+                    let name = flexibleString(option["n"])
+                    guard !name.isEmpty, values.insert(value).inserted else { return nil }
+                    return .init(n: name, v: value)
+                }
+                guard !options.isEmpty else { return nil }
+                return MovieSort.SortFilter(key: key, name: flexibleString(raw["name"]), values: options)
+            }
+            return category
+        }
     }
     
     private func parseXMLCategories(from xml: String) -> [MovieSort.SortData] {
@@ -312,9 +336,9 @@ class SourceService {
     // MARK: - 获取详情
     
     /// 获取视频详情
-    func getDetail(sourceBean: SourceBean, vodId: String) async throws -> VodInfo? {
+    func getDetail(sourceBean: SourceBean, vodId: String, verifyResource: Bool = false) async throws -> VodInfo? {
         if sourceBean.type == 3 {
-            return try await SpiderGatewayService.shared.detail(source: sourceBean, id: vodId)
+            return try await SpiderGatewayService.shared.detail(source: sourceBean, id: vodId, verifyResource: verifyResource)
         }
         let api = sourceBean.api
         guard !api.isEmpty else { throw SourceError.emptyApi }

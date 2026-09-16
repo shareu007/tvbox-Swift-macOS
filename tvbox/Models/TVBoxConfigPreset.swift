@@ -1,6 +1,7 @@
 import Foundation
 
-/// TVBox 配置入口。真实接口从不入库的 Config/Local/TVBoxPresets.json 加载。
+/// 随 App 构建打包的只读 TVBox 配置入口。
+/// 本机开发预设可从不入库的 Config/Local/TVBoxPresets.json 加载；App 内手动输入不会写回预设。
 struct TVBoxConfigPreset: Identifiable, Hashable, Codable {
     enum Compatibility: String, Codable {
         case native = "原生可用"

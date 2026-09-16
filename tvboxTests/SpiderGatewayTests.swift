@@ -544,6 +544,87 @@ final class SpiderGatewayTests: XCTestCase {
         XCTAssertEqual(presets.map(\.id), ["valid"])
     }
 
+    @MainActor
+    func testMatchingPresetUsesNormalizedURL() throws {
+        let json = #"[{"id":"demo","name":"示例","url":"https://example.com/config.json","compatibility":"原生可用","note":"仅用于测试"}]"#
+        let preset = try XCTUnwrap(TVBoxConfigPreset.decode(from: Data(json.utf8)).first)
+
+        let match = SettingsViewModel.matchingPreset(
+            for: "https://example.com/config.json ",
+            in: [preset]
+        )
+
+        XCTAssertEqual(match?.id, "demo")
+    }
+
+    @MainActor
+    func testManualURLDoesNotMatchBuiltInPreset() throws {
+        let json = #"[{"id":"demo","name":"示例","url":"https://example.com/config.json","compatibility":"原生可用","note":"仅用于测试"}]"#
+        let preset = try XCTUnwrap(TVBoxConfigPreset.decode(from: Data(json.utf8)).first)
+
+        let match = SettingsViewModel.matchingPreset(
+            for: "https://example.com/manual.json",
+            in: [preset]
+        )
+
+        XCTAssertNil(match)
+    }
+
+    @MainActor
+    func testLoadedConfigInspectionReportsPartialCompatibility() {
+        let sources = [
+            SourceBean(key: "json", name: "JSON", api: "https://example.com/api", type: 1),
+            SourceBean(key: "unknown", name: "未知", api: "custom", type: 99)
+        ]
+
+        let result = SettingsViewModel.inspectLoadedConfig(
+            entryURL: "https://example.com/config.json",
+            sources: sources
+        )
+
+        XCTAssertEqual(result.configurationProtocol, "TVBox JSON")
+        XCTAssertEqual(result.compatibility, .partial)
+        XCTAssertEqual(result.supportedSourceCount, 1)
+        XCTAssertEqual(result.totalSourceCount, 2)
+        XCTAssertEqual(result.sourceProtocols, ["JSON", "未知"])
+    }
+
+    @MainActor
+    func testConfigurationProtocolCanBeInferredBeforeLoading() {
+        XCTAssertEqual(
+            SettingsViewModel.inferredConfigurationProtocol(
+                for: "https://example.com/config.json"
+            ),
+            "TVBox JSON"
+        )
+        XCTAssertEqual(
+            SettingsViewModel.inferredConfigurationProtocol(
+                for: "https://example.com/index.js.md5"
+            ),
+            "CatVod JavaScript"
+        )
+    }
+
+    func testSavedVodConfigRoundTripKeepsPrivateListMetadata() throws {
+        let config = SavedVodConfig(
+            name: "示例配置",
+            url: "https://example.com/config.json",
+            configurationProtocol: "TVBox JSON",
+            sourceProtocols: ["JSON", "Node"],
+            compatibility: .compatible,
+            supportedSourceCount: 8,
+            totalSourceCount: 8
+        )
+
+        let encoded = try SavedVodConfig.encode([config])
+        let decoded = try XCTUnwrap(SavedVodConfig.decode(from: encoded).first)
+
+        XCTAssertEqual(decoded.id, config.id)
+        XCTAssertEqual(decoded.url, config.url)
+        XCTAssertEqual(decoded.sourceProtocols, ["JSON", "Node"])
+        XCTAssertEqual(decoded.compatibility, .compatible)
+    }
+
     func testCMSRequestQueryOverridesPresetDefaults() {
         let merged = SourceService.mergingQueryItems(
             existing: [

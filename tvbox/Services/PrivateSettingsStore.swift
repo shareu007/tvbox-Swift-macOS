@@ -6,6 +6,7 @@ enum PrivateSettingsStore {
     enum Key: String {
         case vodURL = "vod-url"
         case liveURL = "live-url"
+        case savedVodConfigs = "saved-vod-configs"
         case spiderGatewayURL = "spider-gateway-url"
         case spiderGatewayToken = "spider-gateway-token"
     }
