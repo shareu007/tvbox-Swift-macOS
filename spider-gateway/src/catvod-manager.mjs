@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { attachBoundedLineReader } from "./bounded-lines.mjs";
@@ -176,9 +176,13 @@ export class CatVodManager {
 
   async #create(artifact) {
     if (this.sessions.size >= this.maxSessions) this.#evictOldest();
-    const runtimeDir = path.join(this.runtimeRoot, artifact.digest);
-    await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
+    await mkdir(this.runtimeRoot, { recursive: true, mode: 0o700 });
+    // Provider databases are disposable session state. Reusing a bundle-wide
+    // directory lets a truncated db.json poison every future homepage, and
+    // simultaneous app instances can overwrite each other's database.
+    const runtimeDir = await mkdtemp(path.join(this.runtimeRoot, `${artifact.digest}-`));
     if (this.closed) {
+      await rm(runtimeDir, { recursive: true, force: true });
       throw new GatewayError("CATVOD_STOPPED", "CatVod manager is stopped", 503);
     }
     // Node 26 also gates network access. CatVod providers inherently need
@@ -202,6 +206,10 @@ export class CatVodManager {
         NODE_PATH: runtimeDir,
         ...safeProxyEnvironment()
       }
+    });
+    // Wait for the process and its streams to close before removing its files.
+    child.once("close", () => {
+      void rm(runtimeDir, { recursive: true, force: true }).catch(() => {});
     });
     const session = new CatVodSession(child, { timeoutMs: this.timeoutMs, maxLineBytes: this.maxLineBytes });
     this.startingSessions.add(session);

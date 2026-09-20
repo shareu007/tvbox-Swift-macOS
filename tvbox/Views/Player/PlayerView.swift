@@ -48,6 +48,7 @@ private struct MacOSPlayerView: NSViewRepresentable {
 /// 系统播放器会话控制器：用于在页面内联与全屏视图间复用同一 AVPlayer，避免重复拉流
 @MainActor
 final class SystemPlayerSessionController: ObservableObject {
+    let subtitles = SystemSubtitleController()
     fileprivate var player: AVPlayer?
     fileprivate var mediaURLString: String?
     fileprivate var mediaHeaders: [String: String] = [:]
@@ -63,6 +64,7 @@ final class SystemPlayerSessionController: ObservableObject {
     }
     
     func stop() {
+        subtitles.reset()
         let stoppingPlayer = player
         player?.pause()
         player = nil
@@ -188,6 +190,8 @@ struct AVPlayerContentView: View {
     @State private var isDraggingProgress = false
     @State private var draggingSeconds: Double = 0
     @State private var playerObservers: [NSKeyValueObservation] = []
+    @State private var ownedSubtitles = SystemSubtitleController()
+    private var subtitles: SystemSubtitleController { sharedController?.subtitles ?? ownedSubtitles }
     #if os(macOS)
     @State private var sleepPreventionOwner = UUID()
     #endif
@@ -434,6 +438,7 @@ struct AVPlayerContentView: View {
         ]
         // 监听 AVPlayerItem 状态，捕获加载失败的具体原因
         if let item = player.currentItem {
+            subtitles.bind(to: item)
             let itemObserver = item.observe(\.status, options: [.new]) { observedItem, _ in
                 if observedItem.status == .failed {
                     let errorDesc = observedItem.error?.localizedDescription ?? "未知错误"
@@ -479,6 +484,7 @@ struct AVPlayerContentView: View {
             player = nil
             return
         }
+        subtitles.reset()
         
         currentPlayer.pause()
         if sharedController?.player === currentPlayer {
@@ -639,11 +645,12 @@ struct AVPlayerContentView: View {
                 // 左：倍速
                 playbackRateMenu
                     .frame(minWidth: 36, alignment: .leading)
+                subtitleMenu.padding(.leading, 4)
                 
                 Spacer()
                 
                 // 中间：主控按钮
-                HStack(spacing: 20) {
+                HStack(spacing: containerWidth < 420 ? 8 : 20) {
                     Button {
                         wakeUpControls()
                         seek(by: -seekStep)
@@ -750,6 +757,7 @@ struct AVPlayerContentView: View {
             HStack(spacing: 0) {
                 HStack(spacing: 16) {
                     playbackRateMenu
+                    subtitleMenu
                 }
                 .frame(width: 150, alignment: .leading)
                 
@@ -875,6 +883,13 @@ struct AVPlayerContentView: View {
         .frame(width: controlWidth)
         #endif
         .environment(\.colorScheme, .dark)
+    }
+
+    private var subtitleMenu: some View {
+        SubtitleMenu(state: subtitles.state) { selection in
+            wakeUpControls()
+            subtitles.select(selection)
+        }
     }
 
     private var playbackRateMenu: some View {

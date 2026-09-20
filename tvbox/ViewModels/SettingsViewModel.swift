@@ -135,6 +135,13 @@ class SettingsViewModel: ObservableObject {
         refreshCacheSize()
     }
 
+    /// 确认检测结果后，再执行输入窗口的关闭动作。
+    func dismissConfigInspection(closeInput: () -> Void = {}) {
+        // 结果只消费一次；先清空再离开结果页，重新打开输入窗口时不会带入旧结果。
+        configInspectionResult = nil
+        closeInput()
+    }
+
     /// 保存 Spider Gateway 地址；空值表示关闭 type=3 支持。
     @discardableResult
     func saveSpiderGateway() -> Bool {
@@ -158,6 +165,8 @@ class SettingsViewModel: ObservableObject {
     
     /// 加载配置
     func loadConfig(presentInspection: Bool = false) async {
+        guard !isLoadingConfig else { return }
+        configInspectionResult = nil
         let trimmedVod = vodApiUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedLive = liveApiUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedVod.isEmpty else {
@@ -237,11 +246,13 @@ class SettingsViewModel: ObservableObject {
 
     /// 切换到用户已保存的点播配置。
     func loadSavedVodConfig(_ config: SavedVodConfig) async {
+        guard !isLoadingConfig else { return }
         let previousVodUrl = vodApiUrl
         let previousLiveUrl = liveApiUrl
         vodApiUrl = config.url
         liveApiUrl = ""
-        await loadConfig(presentInspection: true)
+        // 列表已展示检测报告；切换只更新行状态，避免向隐藏的设置页发送 Alert。
+        await loadConfig(presentInspection: false)
         if !configSuccess, pendingMultiRepoSelection == nil {
             vodApiUrl = previousVodUrl
             liveApiUrl = previousLiveUrl

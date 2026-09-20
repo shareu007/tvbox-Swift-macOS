@@ -28,11 +28,14 @@ struct SettingsView: View {
     @StateObject private var apiConfig = ApiConfig.shared
     @EnvironmentObject var appState: AppState
     @State private var showApiInput = false
+    private enum ApiInputHost { case settings, savedConfigs }
+    @State private var apiInputHost: ApiInputHost = .settings
     @State private var editingApiType: ApiInputType = .vod
     @State private var originalApiValue = ""
     @State private var originalSpiderGatewayToken = ""
     @State private var showAbout = false
     @State private var sourceSearchText = ""
+    @State private var configSwitchMessage: String?
     @State private var showingPicker: PickerType = .none
     
     enum PickerType {
@@ -182,7 +185,7 @@ struct SettingsView: View {
                     
                     // 关于
                     SectionCard(title: "关于") {
-                        SettingsRow(icon: "info.circle", title: "版本", value: "1.0.0", action: nil)
+                        SettingsRow(icon: "info.circle", title: "版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—", action: nil)
                         Divider().background(Color.white.opacity(0.1))
                         SettingsRow(icon: "globe", title: "站点数量", value: "\(apiConfig.sourceBeanList.count)", action: nil)
                         Divider().background(Color.white.opacity(0.1))
@@ -201,20 +204,15 @@ struct SettingsView: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)
             #endif
-            .sheet(isPresented: $showApiInput) {
-                apiInputSheet
-            }
             .task {
                 viewModel.refreshCurrentVodConfigInspectionIfAvailable()
             }
         }
         .overlay(pickerOverlay)
-        .alert(item: backgroundInspectionResult) { result in
-            Alert(
-                title: Text("配置检测：\(result.compatibility.title)"),
-                message: Text(result.message),
-                dismissButton: .default(Text("知道了"))
-            )
+        .sheet(isPresented: apiInputPresentation(for: .settings), onDismiss: {
+            if apiInputHost == .settings { viewModel.dismissConfigInspection() }
+        }) {
+            apiInputSheet
         }
     }
     
@@ -297,157 +295,161 @@ struct SettingsView: View {
     
     private var apiInputSheet: some View {
         NavigationStack {
-            VStack(spacing: 16) {
-                if editingApiType == .vod {
-                    Text("系统会识别配置协议、站点协议和适配情况，并把可用接口加入“我的点播配置”。接口地址只保存在本机。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+            if let result = viewModel.configInspectionResult {
+                ConfigInspectionResultView(result: result, buttonTitle: "完成并关闭") {
+                    viewModel.dismissConfigInspection { showApiInput = false }
                 }
-
-                HStack {
-                    Image(systemName: "link")
-                        .foregroundColor(.secondary)
-                    TextField(editingApiType.placeholder, text: currentApiBinding)
-                        .textFieldStyle(.plain)
-                        #if os(iOS)
-                        .autocapitalization(.none)
-                        .keyboardType(.URL)
-                        #endif
-                }
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(10)
-
-                if editingApiType == .spiderGateway {
-                    HStack {
-                        Image(systemName: "key")
-                            .foregroundColor(.secondary)
-                        SecureField("Bearer Token（本机无鉴权可留空）", text: $viewModel.spiderGatewayToken)
-                            .textFieldStyle(.plain)
-                    }
-                    .padding()
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(10)
-                }
-                
-                // 粘贴按钮
-                HStack {
-                    Button {
-                        if let text = readPasteboardText() {
-                            currentApiBinding.wrappedValue = text
-                        }
-                    } label: {
-                        Label("粘贴", systemImage: "doc.on.clipboard")
-                            .font(.subheadline)
-                    }
-                    
-                    Spacer()
-                }
-                
-                // 历史记录
-                if editingApiType != .spiderGateway, !viewModel.apiHistory.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("最近使用（仅保存在本机）")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        ForEach(viewModel.apiHistory, id: \.self) { url in
-                            HStack {
-                                Button {
-                                    currentApiBinding.wrappedValue = url
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "clock")
-                                            .font(.caption)
-                                        Text(SensitiveURLRedactor.redact(url))
-                                            .font(.caption)
-                                            .lineLimit(1)
-                                    }
-                                    .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                Button {
-                                    viewModel.removeApiHistory(url)
-                                } label: {
-                                    Image(systemName: "xmark.circle")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                if let error = viewModel.configError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                }
-                
-                Spacer()
-            }
-            .padding()
-            .navigationTitle(editingApiType.title)
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { cancelApiEditing() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        if editingApiType == .spiderGateway {
-                            if viewModel.saveSpiderGateway() {
-                                appState.currentSourceKey = ApiConfig.shared.homeSourceBean?.key ?? ""
-                                showApiInput = false
-                            }
-                        } else {
-                            Task {
-                                await viewModel.loadConfig(
-                                    presentInspection: editingApiType == .vod
-                                )
-                                if viewModel.configSuccess {
-                                    appState.applyLoadedConfigState()
-                                    if editingApiType != .vod {
-                                        showApiInput = false
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        if viewModel.isLoadingConfig {
-                            ProgressView()
-                        } else {
-                            Text("加载并使用")
-                        }
-                    }
-                    .disabled(
-                        viewModel.isLoadingConfig
-                        || (editingApiType != .spiderGateway
-                            && viewModel.vodApiUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    )
-                }
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .navigationTitle(editingApiType.title)
+            } else {
+                apiInputForm
             }
         }
         .overlay(multiRepoSelectionOverlay)
-        .alert(item: $viewModel.configInspectionResult) { result in
-            Alert(
-                title: Text("配置检测：\(result.compatibility.title)"),
-                message: Text(result.message),
-                dismissButton: .default(Text("知道了")) {
-                    showApiInput = false
-                }
-            )
-        }
         #if os(iOS)
         .presentationDetents([.medium, .large])
         #endif
     }
-    
+
+    private var apiInputForm: some View {
+        VStack(spacing: 16) {
+            if editingApiType == .vod {
+                Text("系统会识别配置协议、站点协议和适配情况，并把可用接口加入“我的点播配置”。接口地址只保存在本机。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            HStack {
+                Image(systemName: "link")
+                    .foregroundColor(.secondary)
+                TextField(editingApiType.placeholder, text: currentApiBinding)
+                    .textFieldStyle(.plain)
+                    #if os(iOS)
+                    .autocapitalization(.none)
+                    .keyboardType(.URL)
+                    #endif
+            }
+            .padding()
+            .background(Color.secondary.opacity(0.1))
+            .cornerRadius(10)
+
+            if editingApiType == .spiderGateway {
+                HStack {
+                    Image(systemName: "key")
+                        .foregroundColor(.secondary)
+                    SecureField("Bearer Token（本机无鉴权可留空）", text: $viewModel.spiderGatewayToken)
+                        .textFieldStyle(.plain)
+                }
+                .padding()
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(10)
+            }
+
+            // 粘贴按钮
+            HStack {
+                Button {
+                    if let text = readPasteboardText() {
+                        currentApiBinding.wrappedValue = text
+                    }
+                } label: {
+                    Label("粘贴", systemImage: "doc.on.clipboard")
+                        .font(.subheadline)
+                }
+
+                Spacer()
+            }
+
+            // 历史记录
+            if editingApiType != .spiderGateway, !viewModel.apiHistory.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("最近使用（仅保存在本机）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    ForEach(viewModel.apiHistory, id: \.self) { url in
+                        HStack {
+                            Button {
+                                currentApiBinding.wrappedValue = url
+                            } label: {
+                                HStack {
+                                    Image(systemName: "clock")
+                                        .font(.caption)
+                                    Text(SensitiveURLRedactor.redact(url))
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                }
+                                .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Button {
+                                viewModel.removeApiHistory(url)
+                            } label: {
+                                Image(systemName: "xmark.circle")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let error = viewModel.configError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+
+            Spacer()
+        }
+        .padding()
+        .navigationTitle(editingApiType.title)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("取消") { cancelApiEditing() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button {
+                    if editingApiType == .spiderGateway {
+                        if viewModel.saveSpiderGateway() {
+                            appState.currentSourceKey = ApiConfig.shared.homeSourceBean?.key ?? ""
+                            showApiInput = false
+                        }
+                    } else {
+                        Task {
+                            await viewModel.loadConfig(
+                                presentInspection: editingApiType == .vod
+                            )
+                            if viewModel.configSuccess {
+                                appState.applyLoadedConfigState()
+                                if editingApiType != .vod {
+                                    showApiInput = false
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    if viewModel.isLoadingConfig {
+                        ProgressView()
+                    } else {
+                        Text("加载并使用")
+                    }
+                }
+                .disabled(
+                    viewModel.isLoadingConfig
+                    || (editingApiType != .spiderGateway
+                        && viewModel.vodApiUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                )
+            }
+        }
+    }
+
     @ViewBuilder
     private var multiRepoSelectionOverlay: some View {
         if let pending = viewModel.pendingMultiRepoSelection {
@@ -487,18 +489,6 @@ struct SettingsView: View {
         }
     }
 
-    /// 输入弹窗显示时由弹窗自己展示检测结果，避免同一 Alert 被底层页面抢先消费。
-    private var backgroundInspectionResult: Binding<VodConfigInspectionResult?> {
-        Binding(
-            get: {
-                showApiInput ? nil : viewModel.configInspectionResult
-            },
-            set: {
-                viewModel.configInspectionResult = $0
-            }
-        )
-    }
-    
     private func readPasteboardText() -> String? {
         #if os(iOS)
         UIPasteboard.general.string
@@ -507,7 +497,19 @@ struct SettingsView: View {
         #endif
     }
     
-    private func beginEditingApi(_ type: ApiInputType) {
+    /// NavigationStack 推入列表后，输入窗口必须由当前可见页面持有。
+    /// 两个宿主互斥；隐藏宿主的关闭回写不能关闭可见宿主的窗口。
+    private func apiInputPresentation(for host: ApiInputHost) -> Binding<Bool> {
+        Binding(
+            get: { showApiInput && apiInputHost == host },
+            set: { if apiInputHost == host { showApiInput = $0 } }
+        )
+    }
+
+    private func beginEditingApi(_ type: ApiInputType, host: ApiInputHost = .settings) {
+        viewModel.dismissConfigInspection()
+        configSwitchMessage = nil
+        apiInputHost = host
         editingApiType = type
         originalApiValue = currentApiBinding.wrappedValue
         originalSpiderGatewayToken = viewModel.spiderGatewayToken
@@ -516,6 +518,7 @@ struct SettingsView: View {
     }
 
     private func cancelApiEditing() {
+        viewModel.dismissConfigInspection()
         viewModel.cancelPendingMultiRepoSelection()
         currentApiBinding.wrappedValue = originalApiValue
         if editingApiType == .spiderGateway {
@@ -545,6 +548,30 @@ struct SettingsView: View {
                     .foregroundColor(.white.opacity(0.65))
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                if viewModel.isLoadingConfig {
+                    ProgressView("正在切换配置…")
+                        .tint(.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if let error = viewModel.configError {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if let message = configSwitchMessage {
+                    Label(message, systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if !showApiInput, let result = viewModel.configInspectionResult {
+                    ConfigInspectionResultView(result: result, buttonTitle: "完成") {
+                        viewModel.dismissConfigInspection()
+                    }
+                    .padding(16)
+                    .glassCard(cornerRadius: 16)
+                }
+
                 if viewModel.savedVodConfigs.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "tray")
@@ -563,12 +590,14 @@ struct SettingsView: View {
                 }
 
                 ForEach(viewModel.savedVodConfigs) { config in
-                    HStack(alignment: .top, spacing: 12) {
+                    HStack(alignment: .center, spacing: 0) {
                         Button {
+                            configSwitchMessage = nil
                             Task {
                                 await viewModel.loadSavedVodConfig(config)
                                 if viewModel.configSuccess {
                                     appState.applyLoadedConfigState()
+                                    configSwitchMessage = "已切换配置，返回首页即可浏览新的内容。"
                                 }
                             }
                         } label: {
@@ -604,12 +633,22 @@ struct SettingsView: View {
 
                                 if ApiConfig.normalizeConfigUrl(viewModel.vodApiUrl)
                                     == ApiConfig.normalizeConfigUrl(config.url) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.orange)
+                                    if viewModel.isLoadingConfig {
+                                        ProgressView().controlSize(.small)
+                                        Text("切换中…").font(.caption).foregroundColor(.orange)
+                                    } else {
+                                        Label("当前使用", systemImage: "checkmark.circle.fill")
+                                            .font(.caption)
+                                            .foregroundColor(.orange)
+                                    }
                                 }
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(16)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("savedConfig.\(config.id)")
 
                         Button {
                             viewModel.removeSavedVodConfig(config)
@@ -619,8 +658,8 @@ struct SettingsView: View {
                                 .padding(8)
                         }
                         .buttonStyle(.plain)
+                        .padding(.trailing, 8)
                     }
-                    .padding(16)
                     .glassCard(cornerRadius: 16)
                     .disabled(viewModel.isLoadingConfig)
                 }
@@ -670,28 +709,20 @@ struct SettingsView: View {
                     }
                 }
 
-                if viewModel.isLoadingConfig {
-                    ProgressView("正在加载配置…")
-                        .tint(.orange)
-                        .foregroundColor(.secondary)
-                        .padding()
-                }
-
-                if let error = viewModel.configError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding(.horizontal)
-                }
             }
             .padding(20)
         }
         .background(AppTheme.primaryGradient.ignoresSafeArea())
         .navigationTitle("我的点播配置")
         .overlay(multiRepoSelectionOverlay)
+        .sheet(isPresented: apiInputPresentation(for: .savedConfigs), onDismiss: {
+            if apiInputHost == .savedConfigs { viewModel.dismissConfigInspection() }
+        }) {
+            apiInputSheet
+        }
         .toolbar {
             Button("添加") {
-                beginEditingApi(.vod)
+                beginEditingApi(.vod, host: .savedConfigs)
             }
         }
         #if os(iOS)

@@ -415,7 +415,9 @@ class HomeViewModel: ObservableObject {
         }
         guard !Task.isCancelled else { return nil }
         let candidates = fallbackSources().filter { tried.insert($0.key).inserted }
-        return await firstSuccessfulSource(in: Array(candidates.prefix(6)))
+        // 可用来源可能位于配置末尾；限制并发数，而不是截断候选列表。
+        // firstSuccessfulSource 最多同时检查三个来源，找到影片后取消其余请求。
+        return await firstSuccessfulSource(in: candidates)
     }
 
     private func firstSuccessfulSource(in candidates: [SourceBean]) async -> FallbackResult? {

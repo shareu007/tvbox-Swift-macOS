@@ -162,6 +162,8 @@ CatVod 目录接口为 `POST /v1/catvod/catalog`，请求体是 `{ "bundle": "ht
 
 Node 26 环境会额外授予 CatVod 子进程网络权限；无凭据代理配置可以继承。若 `/play` 未返回 URL 但剧集 id 本身是 HTTP/HTTPS 地址，Gateway 按直链返回。Spider 返回的安全 HTTP Header 会继续传给 AVPlayer；VLC 映射 User-Agent、Referer 和 Cookie。
 
+CatVod bundle 下载缓存仍按摘要复用，但可写运行目录按子进程会话独立创建，进程和管道关闭后删除。站点生成的 `db.json` 是临时缓存，不跨会话或应用实例共享，避免中断写入留下的空数据库导致所有首页持续为空；用户接口、收藏、历史和网盘凭据不存放在这个目录。
+
 ## 7. 播放规则
 
 type 3 剧集条目中的 URL 实际上可能只是 Spider 的播放 id。客户端选择剧集后必须先调用 `player`：

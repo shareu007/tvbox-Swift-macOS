@@ -39,6 +39,35 @@ final class HomeSourceRecoveryTests: XCTestCase {
         XCTAssertEqual(model.displayedVideos.map(\.id), ["good-movie"])
         XCTAssertTrue(model.selectedSort?.isRecommendation == true)
     }
+
+    func testRecoveryReachesUsableSourceAfterFirstSixEmptyCandidates() async {
+        let empty = source("empty")
+        let unavailable = (1...7).map { source("unavailable-\($0)") }
+        let usable = source("usable")
+        var current = empty
+        var probedKeys = Set<String>()
+        let model = HomeViewModel(
+            currentSource: { current },
+            fallbackSources: { [empty] + unavailable + [usable] },
+            selectHomeSource: { current = $0 },
+            sortLoader: { candidate in
+                probedKeys.insert(candidate.key)
+                return ([.init(id: "recent", name: "最近更新")], [])
+            },
+            listLoader: { candidate, _, _, _ in
+                candidate.key == usable.key ? [Movie.Video(id: "movie", sourceKey: candidate.key)] : []
+            }
+        )
+
+        await model.refresh()
+
+        XCTAssertTrue(probedKeys.contains(usable.key))
+        XCTAssertEqual(current.key, usable.key)
+        XCTAssertEqual(model.displayedVideos.map(\.id), ["movie"])
+        XCTAssertNil(model.errorMessage)
+        XCTAssertFalse(model.isLoading)
+        XCTAssertTrue(model.sourceRecoveryMessage?.contains(usable.name) == true)
+    }
     func testCandidatesWithOnlyEmptyCategoriesAreRejectedWithRetryableError() async {
         let empty = source("empty")
         let alsoEmpty = source("also-empty")

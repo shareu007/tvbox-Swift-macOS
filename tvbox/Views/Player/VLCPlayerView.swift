@@ -38,6 +38,7 @@ private enum VLCMediaPlayerReleaser {
 
 @MainActor
 final class VLCPlayerController: NSObject, ObservableObject, VLCMediaPlayerDelegate {
+    let subtitles = SubtitleState()
     static let supportedPlaybackRates: [Float] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
     private static let defaultVolume = 100
     private static let maxVolume = 200
@@ -167,6 +168,7 @@ final class VLCPlayerController: NSObject, ObservableObject, VLCMediaPlayerDeleg
             || currentMediaHeaders != headers
         if isNewMedia {
             resetPlaybackRecoveryState()
+            subtitles.reset()
         }
         syncDecodeModeFromSettings()
         syncBufferModeFromSettings()
@@ -256,6 +258,7 @@ final class VLCPlayerController: NSObject, ObservableObject, VLCMediaPlayerDeleg
     }
     
     func stop() {
+        subtitles.reset()
         stopProgressTimer()
         resetPlaybackRecoveryState()
         cancelScheduledRebinds()
@@ -280,6 +283,35 @@ final class VLCPlayerController: NSObject, ObservableObject, VLCMediaPlayerDeleg
         VLCMediaPlayerReleaser.release(player)
     }
     
+    func selectSubtitle(_ selection: SubtitleSelection) {
+        if case .track(let id) = selection, !subtitles.tracks.contains(where: { $0.id == id }) { return }
+        subtitles.selection = selection
+        applySubtitleSelection()
+    }
+
+    private func applySubtitleSelection() {
+        guard let player = _mediaPlayer else { return }
+        let id = subtitles.desiredTrackID()
+        player.currentVideoSubTitleIndex = Int32(id ?? -1)
+        subtitles.selectedTrackID = id
+    }
+
+    private func refreshSubtitleTracks() {
+        guard let player = _mediaPlayer else { return }
+        let names = player.videoSubTitlesNames as? [String] ?? []
+        let indexes = (player.videoSubTitlesIndexes as? [NSNumber] ?? []).map(\.intValue)
+        let tracks = SubtitleTrack.vlcTracks(names: names, indexes: indexes)
+        if subtitles.tracks != tracks {
+            subtitles.tracks = tracks
+            applySubtitleSelection()
+        }
+        let loading = tracks.isEmpty && [.opening, .buffering].contains(player.state)
+        if subtitles.isLoading != loading { subtitles.isLoading = loading }
+        let id = player.currentVideoSubTitleIndex
+        let selected = id >= 0 ? Int(id) : nil
+        if subtitles.selectedTrackID != selected { subtitles.selectedTrackID = selected }
+    }
+
     func togglePlayback() {
         if isPlaying {
             mediaPlayer.pause()
@@ -578,6 +610,7 @@ final class VLCPlayerController: NSObject, ObservableObject, VLCMediaPlayerDeleg
     
     private func emitProgress() {
         refreshPlaybackFlags()
+        refreshSubtitleTracks()
         guard !isLive else { return }
         let current = currentSeconds()
         guard current.isFinite, current >= 0 else { return }
@@ -1127,11 +1160,12 @@ struct VLCVodPlayerView: View {
                 // 左：倍速
                 playbackRateMenu
                     .frame(minWidth: 36, alignment: .leading)
+                subtitleMenu.padding(.leading, 4)
                 
                 Spacer()
                 
                 // 中间：主控按钮
-                HStack(spacing: 20) {
+                HStack(spacing: containerWidth < 420 ? 8 : 20) {
                     Button {
                         wakeUpControls()
                         controller.seek(by: -seekStep)
@@ -1238,6 +1272,7 @@ struct VLCVodPlayerView: View {
             HStack(spacing: 0) {
                 HStack(spacing: 16) {
                     playbackRateMenu
+                    subtitleMenu
                 }
                 .frame(width: 150, alignment: .leading)
                 
@@ -1365,6 +1400,13 @@ struct VLCVodPlayerView: View {
         .environment(\.colorScheme, .dark)
     }
     
+    private var subtitleMenu: some View {
+        SubtitleMenu(state: controller.subtitles) { selection in
+            wakeUpControls()
+            controller.selectSubtitle(selection)
+        }
+    }
+
     private var playbackRateMenu: some View {
         Menu {
             ForEach(VLCPlayerController.supportedPlaybackRates, id: \.self) { rate in
