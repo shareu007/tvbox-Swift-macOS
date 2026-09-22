@@ -4,7 +4,7 @@ import Combine
 
 struct HomeRecommendationSection: Identifiable {
     let sort: MovieSort.SortData
-    let filters: [String: String]
+    var filters: [String: String]
     var videos: [Movie.Video] = []
     var isLoading = true
     var errorMessage: String?
@@ -143,7 +143,7 @@ class HomeViewModel: ObservableObject {
     private let currentSource: @MainActor () -> SourceBean?
     private let fallbackSources: @MainActor () -> [SourceBean]
     private let selectHomeSource: @MainActor (SourceBean) -> Void
-    private var loadedSourceKey: String?
+    private var loadedSource: SourceBean?
     private var homeRequestID = UUID()
     private var recommendationRequestID = UUID()
     private var refreshRequestID = UUID()
@@ -175,7 +175,7 @@ class HomeViewModel: ObservableObject {
     
     /// 保留普通页面返回时的选择；设置页更换来源后必须重新加载分类。
     func refreshIfNeeded() async {
-        guard sorts.isEmpty || loadedSourceKey != currentSource()?.key else { return }
+        guard sorts.isEmpty || loadedSource != currentSource() else { return }
         await refresh()
     }
 
@@ -198,8 +198,8 @@ class HomeViewModel: ObservableObject {
             errorMessage = "请先在设置中配置首页来源"
             return
         }
-        if loadedSourceKey != source.key {
-            if loadedSourceKey != nil { selectedSort = .home() }
+        if loadedSource != source {
+            if loadedSource != nil { selectedSort = .home() }
             selectedFilters = [:]
             recommendationFilters = [:]
             homeVideos = []
@@ -213,14 +213,14 @@ class HomeViewModel: ObservableObject {
         do {
             // 首页存在多个同类影视源；首轮失败时立即切换，避免在失效域名上重复等待。
             let result = try await sortLoader(source)
-            guard homeRequestID == requestID, currentSource()?.key == source.key, !Task.isCancelled else { return }
+            guard homeRequestID == requestID, currentSource() == source, !Task.isCancelled else { return }
             guard !result.sorts.isEmpty || !result.homeVideos.isEmpty else {
                 throw SourceError.parseError("接口没有返回分类或影片")
             }
-            applySortResult(result, sourceKey: source.key)
+            applySortResult(result, source: source)
             lastLoadFailedDueToNetwork = false
         } catch {
-            guard homeRequestID == requestID, currentSource()?.key == source.key, !Task.isCancelled else { return }
+            guard homeRequestID == requestID, currentSource() == source, !Task.isCancelled else { return }
             await recoverUnavailableSource(source, homeRequest: requestID, reason: error.localizedDescription)
             lastLoadFailedDueToNetwork = errorMessage != nil && error.isNetworkConnectionError
             return
@@ -232,7 +232,7 @@ class HomeViewModel: ObservableObject {
 
     private func applySortResult(
         _ result: (sorts: [MovieSort.SortData], homeVideos: [Movie.Video]),
-        sourceKey: String
+        source: SourceBean
     ) {
         // 上游没有首页影片时，从分类补充内容，仍可进入推荐页。
         var allSorts = [MovieSort.SortData.home()]
@@ -244,15 +244,15 @@ class HomeViewModel: ObservableObject {
         errorMessage = nil
 
         // 切源后尽量保留同名分类；若新源不存在该分类，则进入首个可用分类。
-        selectedSort = Self.preferredSort(previous: selectedSort, available: allSorts, sameSource: loadedSourceKey == sourceKey)
-        if loadedSourceKey != sourceKey {
+        selectedSort = Self.preferredSort(previous: selectedSort, available: allSorts, sameSource: loadedSource == source)
+        if loadedSource != source {
             selectedFilters = [:]
             recommendationFilters = [:]
         }
         selectedFilters = selectedFilters.filter { key, value in
             browseFilters.contains { $0.key == key && $0.values.contains { $0.v == value } }
         }
-        loadedSourceKey = sourceKey
+        loadedSource = source
     }
 
     /// 只使用上游明确声明的热度筛选，不向不支持的接口猜测参数。
@@ -271,6 +271,10 @@ class HomeViewModel: ObservableObject {
     }
 
     static func recommendationCategories(from sorts: [MovieSort.SortData]) -> [MovieSort.SortData] {
+        Array(orderedRecommendationCategories(from: sorts).prefix(4))
+    }
+
+    private static func orderedRecommendationCategories(from sorts: [MovieSort.SortData]) -> [MovieSort.SortData] {
         var seen = Set<String>()
         let categories = sorts.filter { !$0.isRecommendation && seen.insert($0.id).inserted }
         // 电影优先；来源只提供叶子分类时也能识别动作片、喜剧片等电影内容。
@@ -281,12 +285,12 @@ class HomeViewModel: ObservableObject {
             if let match { selected.append(match) }
         }
         selected.append(contentsOf: categories.filter { category in !selected.contains { $0.id == category.id } })
-        return Array(selected.prefix(4))
+        return selected
     }
 
     /// 每次最多三路分类请求；小分页额外补一页，总量有界且不执行播放/网盘转存。
     func loadRecommendations() async {
-        guard let source = currentSource(), loadedSourceKey == source.key else { return }
+        guard let source = currentSource(), loadedSource == source else { return }
         let requestID = UUID()
         recommendationRequestID = requestID
         let plans = Self.recommendationCategories(from: sorts).map {
@@ -294,6 +298,9 @@ class HomeViewModel: ObservableObject {
         }
         recommendationSections = plans
         isLoadingRecommendations = !plans.isEmpty
+        defer {
+            if recommendationRequestID == requestID { isLoadingRecommendations = false }
+        }
         let loader = listLoader
         await withTaskGroup(of: HomeRecommendationSection.self) { group in
             var iterator = plans.makeIterator()
@@ -302,14 +309,16 @@ class HomeViewModel: ObservableObject {
                     var section = plan
                     do {
                         try Task.checkCancellation()
-                        section.videos = Self.uniqueVideos(try await loader(source, plan.sort, 1, plan.filters))
+                        let preview = try await self.categoryPreview(source: source, sort: plan.sort, filters: plan.filters)
+                        section.filters = preview.filters
+                        section.videos = Self.uniqueVideos(preview.videos)
                         if !section.videos.isEmpty, section.videos.count < 12 {
                             do {
                                 try Task.checkCancellation()
-                                guard self.recommendationRequestID == requestID, self.currentSource()?.key == source.key else {
+                                guard self.recommendationRequestID == requestID, self.currentSource() == source else {
                                     throw CancellationError()
                                 }
-                                let more = try await loader(source, plan.sort, 2, plan.filters)
+                                let more = try await loader(source, plan.sort, 2, section.filters)
                                 section.videos = Self.uniqueVideos(section.videos + more)
                             } catch is CancellationError { throw CancellationError() }
                             catch { section.errorMessage = "部分内容未能加载，可重试或进入分类查看更多" }
@@ -326,7 +335,7 @@ class HomeViewModel: ObservableObject {
             }
             for _ in 0..<3 { if let plan = iterator.next() { enqueue(plan) } }
             for await section in group {
-                guard recommendationRequestID == requestID, currentSource()?.key == source.key, !Task.isCancelled else {
+                guard recommendationRequestID == requestID, currentSource() == source, !Task.isCancelled else {
                     group.cancelAll()
                     break
                 }
@@ -337,15 +346,25 @@ class HomeViewModel: ObservableObject {
             }
         }
         guard recommendationRequestID == requestID else { return }
-        isLoadingRecommendations = false
         for index in recommendationSections.indices where recommendationSections[index].isLoading {
             recommendationSections[index].isLoading = false
             recommendationSections[index].errorMessage = "加载已取消，请重试"
         }
-        guard !Task.isCancelled, currentSource()?.key == source.key else { return }
+        guard !Task.isCancelled, currentSource() == source else { return }
         if !homeVideos.isEmpty || recommendationSections.contains(where: { !$0.videos.isEmpty }) {
             lastSuccessfulSource = source
         } else if recommendationFilters.isEmpty, selectedSort?.isRecommendation == true {
+            let attempted = Set(plans.map { $0.sort.id })
+            for sort in Self.orderedRecommendationCategories(from: sorts) where !attempted.contains(sort.id) {
+                guard recommendationRequestID == requestID, currentSource() == source, !Task.isCancelled else { return }
+                guard let preview = try? await categoryPreview(source: source, sort: sort, filters: recommendationSourceFilters(for: sort)),
+                      !preview.videos.isEmpty else { continue }
+                guard recommendationRequestID == requestID, currentSource() == source, !Task.isCancelled else { return }
+                recommendationSections = [HomeRecommendationSection(sort: sort, filters: preview.filters,
+                    videos: Array(Self.uniqueVideos(preview.videos).prefix(24)), isLoading: false)]
+                lastSuccessfulSource = source
+                return
+            }
             await recoverUnavailableSource(source, homeRequest: homeRequestID, recommendationRequest: requestID,
                                            reason: "来源未返回影片，首页和分类内容均不可用")
         }
@@ -375,11 +394,11 @@ class HomeViewModel: ObservableObject {
         recommendationRequest: UUID? = nil,
         reason: String
     ) async {
-        guard homeRequestID == homeRequest, currentSource()?.key == failedSource.key, !Task.isCancelled else { return }
+        guard homeRequestID == homeRequest, currentSource() == failedSource, !Task.isCancelled else { return }
         isLoading = true
         sourceRecoveryMessage = "\(failedSource.name)暂时没有可用首页，正在尝试其他来源…"
         let fallback = await firstAvailableFallback(excluding: failedSource)
-        guard homeRequestID == homeRequest, currentSource()?.key == failedSource.key, !Task.isCancelled,
+        guard homeRequestID == homeRequest, currentSource() == failedSource, !Task.isCancelled,
               recommendationRequest == nil || recommendationRequestID == recommendationRequest else { return }
         isLoading = false
         guard let fallback else {
@@ -391,7 +410,7 @@ class HomeViewModel: ObservableObject {
         }
         selectHomeSource(fallback.source)
         selectedSort = .home()
-        applySortResult(fallback.result, sourceKey: fallback.source.key)
+        applySortResult(fallback.result, source: fallback.source)
         unavailableSource = failedSource
         sourceRecoveryMessage = "\(failedSource.name)暂时不可用，已切换到\(fallback.source.name)"
         lastLoadFailedDueToNetwork = false
@@ -409,12 +428,13 @@ class HomeViewModel: ObservableObject {
 
     private func firstAvailableFallback(excluding failedSource: SourceBean) async -> FallbackResult? {
         var tried = Set([failedSource.key])
-        // 优先恢复用户刚才已经成功浏览的来源。
-        if let previous = lastSuccessfulSource, tried.insert(previous.key).inserted {
+        let configuredSources = fallbackSources()
+        // 只恢复当前配置仍包含的来源，不能跳回上一个接口的同名站点。
+        if let previous = lastSuccessfulSource, configuredSources.contains(previous), tried.insert(previous.key).inserted {
             if let result = try? await loadFallback(previous) { return result }
         }
         guard !Task.isCancelled else { return nil }
-        let candidates = fallbackSources().filter { tried.insert($0.key).inserted }
+        let candidates = configuredSources.filter { tried.insert($0.key).inserted }
         // 可用来源可能位于配置末尾；限制并发数，而不是截断候选列表。
         // firstSuccessfulSource 最多同时检查三个来源，找到影片后取消其余请求。
         return await firstSuccessfulSource(in: candidates)
@@ -444,12 +464,12 @@ class HomeViewModel: ObservableObject {
         var result = try await sortLoader(source)
         try Task.checkCancellation()
         if result.homeVideos.isEmpty {
-            // 部分 Spider 首页只返回分类；验证前两个代表分类，不接受只有占位分类的空响应。
-            for sort in Self.recommendationCategories(from: result.sorts).prefix(2) {
+            // 推荐展示数量不应限制来源可用性检查。
+            for sort in Self.orderedRecommendationCategories(from: result.sorts) {
                 try Task.checkCancellation()
                 let filters = source.type == 0 ? [:] : Self.popularFilters(for: sort)
-                if let videos = try? await listLoader(source, sort, 1, filters), !videos.isEmpty {
-                    result.homeVideos = Array(Self.uniqueVideos(videos).prefix(24))
+                if let preview = try? await categoryPreview(source: source, sort: sort, filters: filters), !preview.videos.isEmpty {
+                    result.homeVideos = Array(Self.uniqueVideos(preview.videos).prefix(24))
                     break
                 }
             }
@@ -459,6 +479,22 @@ class HomeViewModel: ObservableObject {
             throw SourceError.parseError("来源未返回可用影片")
         }
         return (source, result)
+    }
+
+    /// 排序是可选增强；它不可用时保留年份/地区条件，只移除热门排序。
+    private func categoryPreview(source: SourceBean, sort: MovieSort.SortData, filters: [String: String]) async throws -> (videos: [Movie.Video], filters: [String: String]) {
+        let popular = Self.popularFilters(for: sort)
+        let defaultOrder = filters.filter { popular[$0.key] != $0.value }
+        do {
+            let videos = try await listLoader(source, sort, 1, filters)
+            if !videos.isEmpty || defaultOrder == filters { return (videos, filters) }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            if defaultOrder == filters { throw error }
+        }
+        try Task.checkCancellation()
+        return (try await listLoader(source, sort, 1, defaultOrder), defaultOrder)
     }
 
     /// 网络恢复时，若上次因网络错误导致首页为空，自动重新加载。
@@ -622,7 +658,7 @@ class HomeViewModel: ObservableObject {
             // 分类或数据源切换过程中，丢弃旧请求结果。
             guard categoryRequestID == requestID,
                   selectedSort?.id == sort.id,
-                  currentSource()?.key == source.key else { return }
+                  currentSource() == source else { return }
             
             if !videos.isEmpty { lastSuccessfulSource = source }
             if page == 1 {

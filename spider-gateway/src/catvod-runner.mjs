@@ -183,14 +183,14 @@ async function main() {
   // Account credentials remain in the trusted Gateway parent process. Remote
   // CatVod bundles receive only an empty compatibility configuration.
   await globalThis.__catvodExports.start({
+    biliCookie: "",
     pans: { list: [] },
     cms: { list: [] },
     sites: { list: [] }
   });
   const server = globalThis.__catvodServer;
   if (!server?.inject) throw new Error("CatVod injection server is unavailable");
-  const initialized = new Set();
-  const initializing = new Map();
+  const initialized = new Map();
 
   async function inject(method, route, payload) {
     let request = server.inject()[method.toLowerCase()](route);
@@ -214,15 +214,13 @@ async function main() {
     if (message.type !== "invoke") throw new Error("Unsupported runner request");
     const site = message.site;
     const initKey = `${site.api}\0${site.ext || ""}`;
-    if (!initialized.has(initKey)) {
-      let initialization = initializing.get(initKey);
-      if (!initialization) {
-        initialization = inject("post", `${site.api.replace(/\/$/, "")}/init`, { ext: site.ext || "" })
-          .then(() => initialized.add(initKey))
-          .finally(() => initializing.delete(initKey));
-        initializing.set(initKey, initialization);
-      }
-      await initialization;
+    // The queue serializes each route, whose provider owns one mutable state.
+    // Remember only its active configuration; A -> B -> A must initialize A again.
+    if (initialized.get(site.api) !== initKey) {
+      // A failed init may already have changed provider state.
+      initialized.delete(site.api);
+      await inject("post", `${site.api.replace(/\/$/, "")}/init`, { ext: site.ext || "" });
+      initialized.set(site.api, initKey);
     }
     const request = actionRequest(site, message.action, message.arguments);
     const result = await inject("post", request.path, request.payload);

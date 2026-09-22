@@ -5,9 +5,11 @@ import Foundation
 class SourceService {
     static let shared = SourceService()
     
-    private let network = NetworkManager.shared
-    
-    private init() {}
+    private let network: NetworkManager
+
+    init(network: NetworkManager = .shared) {
+        self.network = network
+    }
     
     // MARK: - 获取分类列表
     
@@ -34,6 +36,7 @@ class SourceService {
             throw SourceError.invalidApiUrl(api)
         }
         
+        let resolvedExtend = sourceBean.type == 4 ? await resolveExtend(sourceBean.ext ?? "") : ""
         let jsonStr: String
         if sourceBean.type == 0 {
             // XML 接口
@@ -43,12 +46,8 @@ class SourceService {
             var queryItems: [URLQueryItem] = [
                 URLQueryItem(name: "filter", value: "true")
             ]
-            // 加载 extend
-            if let ext = sourceBean.ext, !ext.isEmpty {
-                let extend = await resolveExtend(ext)
-                if !extend.isEmpty {
-                    queryItems.append(URLQueryItem(name: "extend", value: extend))
-                }
+            if !resolvedExtend.isEmpty {
+                queryItems.append(URLQueryItem(name: "extend", value: resolvedExtend))
             }
             let url = try buildURL(base: api, queryItems: queryItems)
             jsonStr = try await network.getString(from: url, maxRetries: maxRetries)
@@ -79,7 +78,8 @@ class SourceService {
                         URLQueryItem(name: "ac", value: "detail"),
                         URLQueryItem(name: "filter", value: "true"),
                         URLQueryItem(name: "pg", value: "1"),
-                        URLQueryItem(name: "ext", value: ext)
+                        URLQueryItem(name: "ext", value: ext),
+                        URLQueryItem(name: "extend", value: resolvedExtend)
                     ]
                 )
             } else {
@@ -92,11 +92,8 @@ class SourceService {
                     ]
                 )
             }
-            if let listStr = try? await network.getString(from: listUrl, maxRetries: maxRetries) {
-                let fallback = (try? parseVideoList(listStr, sourceKey: sourceBean.key, type: sourceBean.type)) ?? []
-                if !fallback.isEmpty {
-                    homeVideos = fallback
-                }
+            if let fallback = try? await loadVideoList(url: listUrl, source: sourceBean, maxRetries: maxRetries), !fallback.isEmpty {
+                homeVideos = fallback
             }
         }
         
@@ -113,7 +110,7 @@ class SourceService {
         
         if sourceBean.type == 0 {
             // XML 格式
-            sorts = parseXMLCategories(from: jsonStr)
+            return try CMSXMLResponseParser.parse(data, sourceKey: sourceBean.key)
         } else {
             // JSON 格式 (type=1, type=4)
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -191,24 +188,6 @@ class SourceService {
         }
     }
     
-    private func parseXMLCategories(from xml: String) -> [MovieSort.SortData] {
-        // 简化的 XML 分类解析
-        var sorts: [MovieSort.SortData] = []
-        let pattern = "<ty id=\"(\\d+)\"[^>]*>([^<]+)</ty>"
-        if let regex = try? NSRegularExpression(pattern: pattern) {
-            let matches = regex.matches(in: xml, range: NSRange(xml.startIndex..., in: xml))
-            for match in matches {
-                if let idRange = Range(match.range(at: 1), in: xml),
-                   let nameRange = Range(match.range(at: 2), in: xml) {
-                    let id = String(xml[idRange])
-                    let name = String(xml[nameRange])
-                    sorts.append(MovieSort.SortData(id: id, name: name))
-                }
-            }
-        }
-        return sorts
-    }
-    
     // MARK: - 获取分类视频列表
     
     /// 获取分类下的视频列表
@@ -283,10 +262,38 @@ class SourceService {
             url = try buildURL(base: api, queryItems: queryItems)
         }
         
-        let jsonStr = try await network.getString(from: url)
-        return try parseVideoList(jsonStr, sourceKey: sourceBean.key, type: sourceBean.type)
+        return try await loadVideoList(url: url, source: sourceBean)
     }
     
+    /// Some JSON CMS servers implement ac=detail but reject ac=videolist.
+    private func loadVideoList(url: String, source: SourceBean, maxRetries: Int = NetworkManager.defaultMaxRetries) async throws -> [Movie.Video] {
+        var originalError: Error?
+        do {
+            let text = try await network.getString(from: url, maxRetries: maxRetries)
+            let videos = try parseVideoList(text, sourceKey: source.key, type: source.type)
+            if !videos.isEmpty || source.type != 1 { return videos }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            guard source.type == 1 else { throw error }
+            originalError = error
+        }
+        try Task.checkCancellation()
+        guard var components = URLComponents(string: url) else { throw SourceError.invalidApiUrl(url) }
+        components.queryItems = (components.queryItems ?? []).map {
+            $0.name == "ac" ? URLQueryItem(name: "ac", value: "detail") : $0
+        }
+        guard let alternate = components.url?.absoluteString else { throw SourceError.invalidApiUrl(url) }
+        do {
+            let text = try await network.getString(from: alternate, maxRetries: maxRetries)
+            return try parseVideoList(text, sourceKey: source.key, type: source.type)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw originalError ?? error
+        }
+    }
+
     private func parseVideoList(_ jsonStr: String, sourceKey: String, type: Int) throws -> [Movie.Video] {
         guard let data = jsonStr.data(using: .utf8) else {
             throw SourceError.parseError("无法解析数据")
@@ -295,7 +302,7 @@ class SourceService {
         var videos: [Movie.Video] = []
         
         if type == 0 {
-            videos = parseXMLVideoList(from: jsonStr, sourceKey: sourceKey)
+            videos = try CMSXMLResponseParser.parse(data, sourceKey: sourceKey).homeVideos
         } else {
             // JSON 格式 (type=1, type=4)
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -311,25 +318,6 @@ class SourceService {
             }
         }
         
-        return videos
-    }
-    
-    private func parseXMLVideoList(from xml: String, sourceKey: String) -> [Movie.Video] {
-        // 简化 XML 视频列表解析
-        var videos: [Movie.Video] = []
-        let pattern = "<video>.*?<id>(\\d+)</id>.*?<name><!\\[CDATA\\[(.+?)\\]\\]></name>.*?<pic>(.*?)</pic>.*?<note><!\\[CDATA\\[(.*?)\\]\\]></note>.*?</video>"
-        if let regex = try? NSRegularExpression(pattern: pattern, options: .dotMatchesLineSeparators) {
-            let matches = regex.matches(in: xml, range: NSRange(xml.startIndex..., in: xml))
-            for match in matches {
-                var video = Movie.Video()
-                if let r = Range(match.range(at: 1), in: xml) { video.id = String(xml[r]) }
-                if let r = Range(match.range(at: 2), in: xml) { video.name = String(xml[r]) }
-                if let r = Range(match.range(at: 3), in: xml) { video.pic = String(xml[r]) }
-                if let r = Range(match.range(at: 4), in: xml) { video.note = String(xml[r]) }
-                video.sourceKey = sourceKey
-                videos.append(video)
-            }
-        }
         return videos
     }
     

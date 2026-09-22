@@ -27,7 +27,7 @@ final class HomeSourceRecoveryTests: XCTestCase {
         let good = source("good")
         let empty = source("empty")
         var current = good
-        let model = HomeViewModel(currentSource: { current }, fallbackSources: { [] }, selectHomeSource: { current = $0 }, sortLoader: { _ in
+        let model = HomeViewModel(currentSource: { current }, fallbackSources: { [good, empty] }, selectHomeSource: { current = $0 }, sortLoader: { _ in
             ([.init(id: "movie", name: "电影")], [])
         }) { source, _, _, _ in
             source.key == good.key ? [Movie.Video(id: "good-movie", sourceKey: source.key)] : []
@@ -158,6 +158,80 @@ final class HomeSourceRecoveryTests: XCTestCase {
         XCTAssertTrue(model.selectedSort?.isRecommendation == true)
         XCTAssertTrue(model.selectedFilters.isEmpty)
         XCTAssertEqual(model.displayedVideos.map(\.sourceKey), [second.key])
+    }
+
+    func testLaterPopulatedCategoryKeepsSelectedSource() async {
+        let current = source("current")
+        let categories = (1...5).map { MovieSort.SortData(id: "c\($0)", name: "栏目\($0)") }
+        let model = HomeViewModel(currentSource: { current }, fallbackSources: { [] }, selectHomeSource: { _ in XCTFail("Must keep source") }, sortLoader: { _ in (categories, []) }) { _, sort, _, _ in
+            sort.id == "c5" ? [Movie.Video(id: "fifth")] : []
+        }
+        await model.refresh()
+        XCTAssertEqual(model.displayedVideos.map(\.id), ["fifth"])
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testEmptyPopularOrderRetriesDefaultList() async {
+        let current = source("current")
+        var category = MovieSort.SortData(id: "movie", name: "电影")
+        category.filters = [.init(key: "by", name: "排序", values: [.init(n: "热门", v: "hits")])]
+        let model = HomeViewModel(currentSource: { current }, fallbackSources: { [] }, selectHomeSource: { _ in XCTFail("Must keep source") }, sortLoader: { _ in ([category], []) }) { _, _, _, filters in
+            filters["by"] == nil ? [Movie.Video(id: "latest")] : []
+        }
+        await model.refresh()
+        XCTAssertEqual(model.displayedVideos.map(\.id), ["latest"])
+        XCTAssertEqual(model.recommendationSections.first?.isPopular, false)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testSameSourceKeyWithNewEndpointReloadsHomepage() async {
+        var current = SourceBean(key: "same", api: "https://first.example/api", type: 1)
+        let model = HomeViewModel(currentSource: { current }, fallbackSources: { [] }, selectHomeSource: { _ in }, sortLoader: { source in
+            ([], [Movie.Video(id: source.api)])
+        }, listLoader: { _, _, _, _ in [] })
+        await model.refresh()
+        current = SourceBean(key: "same", api: "https://second.example/api", type: 1)
+        await model.refreshIfNeeded()
+        XCTAssertEqual(model.displayedVideos.map(\.id), [current.api])
+    }
+
+    func testRecoveryDoesNotReuseSourceFromPreviousConfiguration() async {
+        let old = source("old")
+        let empty = source("empty")
+        var current = old
+        let model = HomeViewModel(currentSource: { current }, fallbackSources: { [empty] }, selectHomeSource: { current = $0 }, sortLoader: { candidate in
+            ([], candidate == old ? [Movie.Video(id: "old-video")] : [])
+        }, listLoader: { _, _, _, _ in [] })
+        await model.refresh()
+        current = empty
+        await model.refresh()
+        XCTAssertEqual(current, empty)
+        XCTAssertTrue(model.displayedVideos.isEmpty)
+        XCTAssertNotNil(model.errorMessage)
+    }
+
+    func testDefaultOrderRetryRetainsSelectedYear() async {
+        let current = source("current")
+        var category = MovieSort.SortData(id: "movie", name: "电影")
+        category.filters = [
+            .init(key: "by", name: "排序", values: [.init(n: "热门", v: "hits")]),
+            .init(key: "year", name: "年份", values: [.init(n: "2024", v: "2024")])
+        ]
+        var requests: [[String: String]] = []
+        let model = HomeViewModel(currentSource: { current }, fallbackSources: { [] }, selectHomeSource: { _ in XCTFail("Must keep source") }, sortLoader: { _ in ([category], []) }) { _, _, _, filters in
+            requests.append(filters)
+            if filters["by"] != nil { throw URLError(.badServerResponse) }
+            var video = Movie.Video(id: "film")
+            video.year = "2024"
+            return [video]
+        }
+        await model.refresh()
+        requests = []
+        await model.selectFilter(key: "year", value: "2024")?.value
+        XCTAssertTrue(requests.contains(["by": "hits", "year": "2024"]))
+        XCTAssertTrue(requests.contains(["year": "2024"]))
+        XCTAssertTrue(requests.allSatisfy { $0["year"] == "2024" })
+        XCTAssertEqual(model.recommendationSections.first?.filters, ["year": "2024"])
     }
 
 }

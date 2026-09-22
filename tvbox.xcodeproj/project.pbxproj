@@ -15,6 +15,7 @@
 		055718093F8DA870480192B8 /* CloudDriveCredentialFileStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111DDAEB5DAE5DF629AD8F57 /* CloudDriveCredentialFileStoreTests.swift */; };
 		058BC2FBB08D016A6FCF4C13 /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06CD8B07440DBB1EF2807795 /* FavoritesView.swift */; };
 		073BA70E29280BDF914166CF /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AAD980DF9D6ABDD040AC805 /* SearchView.swift */; };
+		0988421F4F31BCB331422DEA /* CMSXMLResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA052FA56EA38310DF6CA2C /* CMSXMLResponseParser.swift */; };
 		0B78C3CA1D93FA29531ABD0B /* Movie.swift in Sources */ = {isa = PBXBuildFile; fileRef = D791457269BE952C496ECE55 /* Movie.swift */; };
 		0BEA09EC35E711F27C4B11E7 /* PlaybackSleepPreventer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B82E415DECB46BC30960E501 /* PlaybackSleepPreventer.swift */; };
 		0CE56FEF7BEDF2D9AF2DD1AD /* PlayerGestureLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7491D05031A04661718FF52 /* PlayerGestureLayer.swift */; };
@@ -26,6 +27,7 @@
 		100ED189186C10410BE683C5 /* PlayerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BF545AAFFFFD0B6F7B33E8 /* PlayerEngine.swift */; };
 		1146AF21FB39771C865142D0 /* HomeCategoryGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EA6B27221659788167827F6 /* HomeCategoryGroup.swift */; };
 		12314BE9C595577FEE1839BB /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 016DC7547EE0DE345E510288 /* Extensions.swift */; };
+		1695A0547A85BBFFDCCF2D46 /* HomeSourceProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3756798FAD2BF76EE9BDC19 /* HomeSourceProtocolTests.swift */; };
 		16D0E98EA5DF105764396919 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE08247136FF788C621DA20 /* DesignSystem.swift */; };
 		17BAC049400FFF5487ECD23B /* SourceBean.swift in Sources */ = {isa = PBXBuildFile; fileRef = 617855BC3AE2B293C71A0DA4 /* SourceBean.swift */; };
 		19291FACD401CDE0E6E2963E /* LiveViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21306B53D5CA8BB88593A55D /* LiveViewModel.swift */; };
@@ -79,6 +81,7 @@
 		6765DB90DA62DBEE185104F7 /* DetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131429F267F6A418C282831A /* DetailView.swift */; };
 		6823F2E7A017C2A4337EC11E /* SearchResultGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AC1D10F2D7C04F43C7FD550 /* SearchResultGroupTests.swift */; };
 		68A7BF3D3ECDA73637B644C8 /* MovieSort.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0212ABEA698460948737CABE /* MovieSort.swift */; };
+		68F46EF167DC22A3D4850A6D /* CMSXMLResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA052FA56EA38310DF6CA2C /* CMSXMLResponseParser.swift */; };
 		69BDB52A3ADDA43EAE59DE4B /* EpisodeListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D5D580A3FABBCD5EE1F9A0 /* EpisodeListView.swift */; };
 		6B0EC2D108F81CA51304F309 /* SubtitleTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = F68995659B52DE68D3A1A1D2 /* SubtitleTrack.swift */; };
 		6D8C0D9DBCEDAC09EF128EA5 /* SpiderGatewayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D8152099812991573CE895 /* SpiderGatewayTests.swift */; };
@@ -86,6 +89,7 @@
 		6EC44AD626C64BC902CD9D1B /* CacheStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFD32454522C32D876921A30 /* CacheStore.swift */; };
 		72A1006A1A66F1721DD1618E /* EpisodeListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D5D580A3FABBCD5EE1F9A0 /* EpisodeListView.swift */; };
 		7314CB27EA8B2F894367460E /* CloudDriveSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89DA90872FB1636E1582E770 /* CloudDriveSettingsView.swift */; };
+		73B6A75403177B0DEF07F0A2 /* HomeSourceProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3756798FAD2BF76EE9BDC19 /* HomeSourceProtocolTests.swift */; };
 		74D54978A79B511FDE79524D /* VodInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA608E781D094B187D3034FD /* VodInfo.swift */; };
 		7686C56E8FB63134FF878EDE /* DetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8B3DC7E0B9C01A294C47FC /* DetailViewModel.swift */; };
 		7929088532D3E0747BC48E23 /* SavedVodConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64ECD1165C4D015CD902C362 /* SavedVodConfig.swift */; };
@@ -228,6 +232,7 @@
 		38465140066828E6AB74A9F3 /* SubtitleMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleMenu.swift; sourceTree = "<group>"; };
 		398C8B3127805B0DCC1401CA /* RuntimeSafetyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeSafetyTests.swift; sourceTree = "<group>"; };
 		3A89B850831ED48AB8869FD9 /* HomeBrowseFacet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeBrowseFacet.swift; sourceTree = "<group>"; };
+		3EA052FA56EA38310DF6CA2C /* CMSXMLResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CMSXMLResponseParser.swift; sourceTree = "<group>"; };
 		3EE159FC0B6328166F56CE36 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		479637E2A64C9F821CD3BD1A /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
 		4D52968C6660D33A372F1B1F /* CloudDriveCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudDriveCredentialStore.swift; sourceTree = "<group>"; };
@@ -275,6 +280,7 @@
 		B9D5D580A3FABBCD5EE1F9A0 /* EpisodeListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpisodeListView.swift; sourceTree = "<group>"; };
 		BB87D0D74C7CB27B06EBBC4A /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 		BFD32454522C32D876921A30 /* CacheStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheStore.swift; sourceTree = "<group>"; };
+		C3756798FAD2BF76EE9BDC19 /* HomeSourceProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSourceProtocolTests.swift; sourceTree = "<group>"; };
 		C4414F51E9AA6398F0F38D70 /* ConfigInspectionResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigInspectionResultView.swift; sourceTree = "<group>"; };
 		C9D8152099812991573CE895 /* SpiderGatewayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpiderGatewayTests.swift; sourceTree = "<group>"; };
 		CC13B23604C6DD0CC77058AC /* MediaAvailabilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAvailabilityService.swift; sourceTree = "<group>"; };
@@ -343,6 +349,7 @@
 			children = (
 				D6F94E23C5085A1C8ACB4856 /* ApiConfig.swift */,
 				4D52968C6660D33A372F1B1F /* CloudDriveCredentialStore.swift */,
+				3EA052FA56EA38310DF6CA2C /* CMSXMLResponseParser.swift */,
 				5390B74BED70B8F62B18FD9F /* EmbeddedSpiderGateway.swift */,
 				CC13B23604C6DD0CC77058AC /* MediaAvailabilityService.swift */,
 				D1006DD8209F63DC3AC3C718 /* NetworkManager.swift */,
@@ -388,6 +395,7 @@
 				AFCDE64C6116C0F2C1013CA1 /* ConfigInspectionDismissalTests.swift */,
 				F0BDD6BAC2F5C6C50AFAB5A8 /* HomeBrowseFilterTests.swift */,
 				6595B7DA74925EF30CBF0560 /* HomeCategoryGroupTests.swift */,
+				C3756798FAD2BF76EE9BDC19 /* HomeSourceProtocolTests.swift */,
 				A4E5D54E0FA2FA781AF92F34 /* HomeSourceRecoveryTests.swift */,
 				EFCE8382863E7137647743FD /* ImageLoaderTests.swift */,
 				6D440076F48132CD9E0B80C0 /* MediaAvailabilityServiceTests.swift */,
@@ -837,6 +845,7 @@
 				DAB3E85D8613359950AAE1C4 /* ConfigInspectionDismissalTests.swift in Sources */,
 				2A921A43DB65D7841A7D4BF0 /* HomeBrowseFilterTests.swift in Sources */,
 				00AF21274124AD3A8E9A7A92 /* HomeCategoryGroupTests.swift in Sources */,
+				73B6A75403177B0DEF07F0A2 /* HomeSourceProtocolTests.swift in Sources */,
 				937E8B919606EE2CBBC5FA23 /* HomeSourceRecoveryTests.swift in Sources */,
 				F9663BABFDA0C0F11A092DD1 /* ImageLoaderTests.swift in Sources */,
 				0F8CC9A351E20DD4DF5E5F32 /* MediaAvailabilityServiceTests.swift in Sources */,
@@ -864,6 +873,7 @@
 				633ECC16BBEA9AB61841F8A3 /* ApiConfig.swift in Sources */,
 				3E399383D92192CDA8840FEB /* AppConfig.swift in Sources */,
 				F5D441F52ECDFF3C3E30E53B /* BrowseChip.swift in Sources */,
+				68F46EF167DC22A3D4850A6D /* CMSXMLResponseParser.swift in Sources */,
 				DB893501C654D6CC2D71D198 /* CacheStore.swift in Sources */,
 				F19D2281D427FEE5B1349769 /* ChannelOverlayView.swift in Sources */,
 				FCB5595015B248A87D7943AB /* CloudDriveCredentialStore.swift in Sources */,
@@ -936,6 +946,7 @@
 				92681E0B8820C32CA71BCF89 /* ConfigInspectionDismissalTests.swift in Sources */,
 				2AB2AE1708F3AD39E23E935E /* HomeBrowseFilterTests.swift in Sources */,
 				2966123A9A68979B347BD3AD /* HomeCategoryGroupTests.swift in Sources */,
+				1695A0547A85BBFFDCCF2D46 /* HomeSourceProtocolTests.swift in Sources */,
 				D83250670EE31C83B68D52CB /* HomeSourceRecoveryTests.swift in Sources */,
 				C45894285D17E2F435F21E15 /* ImageLoaderTests.swift in Sources */,
 				85C458753D34E172816B8D36 /* MediaAvailabilityServiceTests.swift in Sources */,
@@ -961,6 +972,7 @@
 				3F69F139D892A91CA7DA6C73 /* ApiConfig.swift in Sources */,
 				D6F4B32786BF79CBF6AB77EA /* AppConfig.swift in Sources */,
 				CC1AC2CB66BB990921859DA8 /* BrowseChip.swift in Sources */,
+				0988421F4F31BCB331422DEA /* CMSXMLResponseParser.swift in Sources */,
 				6EC44AD626C64BC902CD9D1B /* CacheStore.swift in Sources */,
 				B42C3B637B6082ECD044DBFE /* ChannelOverlayView.swift in Sources */,
 				8CC17FF430CF6D8A9BA831F9 /* CloudDriveCredentialStore.swift in Sources */,
@@ -1045,7 +1057,7 @@
 				CODE_SIGN_ENTITLEMENTS = "tvbox/tvbox-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = tvbox/Info.plist;
@@ -1054,7 +1066,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tvbox.app.macos;
 				PRODUCT_NAME = TVBox;
 				SDKROOT = macosx;
@@ -1127,7 +1139,7 @@
 				CODE_SIGN_ENTITLEMENTS = "tvbox/tvbox-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = tvbox/Info.plist;
@@ -1136,7 +1148,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tvbox.app.macos;
 				PRODUCT_NAME = TVBox;
 				SDKROOT = macosx;
@@ -1208,7 +1220,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = tvbox/Info.plist;
@@ -1222,7 +1234,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TVBOX_IOS_BUNDLE_ID)";
 				PRODUCT_NAME = TVBox;
 				SDKROOT = iphoneos;
@@ -1321,7 +1333,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = tvbox/Info.plist;
@@ -1335,7 +1347,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.4;
+				MARKETING_VERSION = 1.0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TVBOX_IOS_BUNDLE_ID)";
 				PRODUCT_NAME = TVBox;
 				SDKROOT = iphoneos;
