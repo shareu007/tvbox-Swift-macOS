@@ -10,10 +10,10 @@ struct SavedVodConfig: Identifiable, Codable, Hashable {
 
         var title: String {
             switch self {
-            case .compatible: return "已适配"
-            case .partial: return "部分适配"
-            case .incompatible: return "未适配"
-            case .unknown: return "未验证"
+            case .compatible: return "协议全部支持"
+            case .partial: return "协议部分支持"
+            case .incompatible: return "协议暂不支持"
+            case .unknown: return "协议未检测"
             }
         }
     }
@@ -26,6 +26,7 @@ struct SavedVodConfig: Identifiable, Codable, Hashable {
     var compatibility: Compatibility
     var supportedSourceCount: Int
     var totalSourceCount: Int
+    var protocolCheckedAt: Date?
     var lastUsedAt: Date
 
     init(
@@ -37,6 +38,7 @@ struct SavedVodConfig: Identifiable, Codable, Hashable {
         compatibility: Compatibility,
         supportedSourceCount: Int = 0,
         totalSourceCount: Int = 0,
+        protocolCheckedAt: Date? = nil,
         lastUsedAt: Date = Date()
     ) {
         self.id = id
@@ -47,6 +49,7 @@ struct SavedVodConfig: Identifiable, Codable, Hashable {
         self.compatibility = compatibility
         self.supportedSourceCount = supportedSourceCount
         self.totalSourceCount = totalSourceCount
+        self.protocolCheckedAt = protocolCheckedAt
         self.lastUsedAt = lastUsedAt
     }
 
@@ -85,11 +88,12 @@ struct VodConfigInspectionResult: Identifiable, Equatable {
     let compatibility: SavedVodConfig.Compatibility
     let supportedSourceCount: Int
     let totalSourceCount: Int
+    let checkedAt = Date()
 
     var message: String {
         let sourceProtocolText = sourceProtocols.isEmpty
             ? "未发现点播源协议"
             : sourceProtocols.joined(separator: "、")
-        return "配置协议：\(configurationProtocol)\n站点协议：\(sourceProtocolText)\n兼容状态：\(compatibility.title)（可用 \(supportedSourceCount) / \(totalSourceCount)）\n\n该接口已加入“我的点播配置”。"
+        return "配置协议：\(configurationProtocol)\n站点协议：\(sourceProtocolText)\n协议支持：\(supportedSourceCount) / \(totalSourceCount) 个站点（\(compatibility.title)）\n协议检测时间：\(checkedAt.formatted(date: .numeric, time: .shortened))\n\n本次仅检查协议。首页实测：未执行；播放实测：未执行。\n协议支持不代表站点可访问或影片可播放。可在“我的点播配置”中检测首页，播放结果将在实际播放后记录。\n\n该接口已加入“我的点播配置”。"
     }
 }

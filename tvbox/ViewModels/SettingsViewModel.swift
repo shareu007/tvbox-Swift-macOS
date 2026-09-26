@@ -265,6 +265,7 @@ class SettingsViewModel: ObservableObject {
         savedVodConfigs.removeAll { $0.id == config.id }
         do {
             try persistSavedVodConfigs()
+            SourceVerificationStore.shared.remove(configURL: config.url)
             configError = nil
         } catch {
             savedVodConfigs = previousConfigs
@@ -476,6 +477,7 @@ class SettingsViewModel: ObservableObject {
             compatibility: inspection.compatibility,
             supportedSourceCount: inspection.supportedSourceCount,
             totalSourceCount: inspection.totalSourceCount,
+            protocolCheckedAt: inspection.checkedAt,
             lastUsedAt: Date()
         )
         savedVodConfigs.removeAll {
@@ -486,6 +488,7 @@ class SettingsViewModel: ObservableObject {
             savedVodConfigs = Array(savedVodConfigs.prefix(30))
         }
         try persistSavedVodConfigs()
+        SourceVerificationStore.shared.register(configURL: url, sources: ApiConfig.shared.sourceBeanList)
     }
 
     private func persistSavedVodConfigs() throws {

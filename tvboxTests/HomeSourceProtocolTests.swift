@@ -79,4 +79,36 @@ final class HomeSourceProtocolTests: XCTestCase {
         XCTAssertEqual(videos.map(\.id), ["detail-film"])
     }
 
+    func testXMLDetailMatchesHomeAndPreservesCDATAPlaybackURL() async throws {
+        let xml = """
+        <rss><list><video><id code="fixture">v-1</id><name>&#x7535;影 &amp; A</name>
+        <des>简介<b>加粗</b>结尾</des><dl><dd flag="m3u8"><![CDATA[正片$https://video.example/a.m3u8?literal=&amp;]]></dd></dl>
+        </video></list></rss>
+        """
+        let service = service { _ in xml }
+        let source = SourceBean(key: "xml", api: "https://fixture.example/xml", type: 0)
+        let home = try await service.getSort(sourceBean: source, maxRetries: 0)
+        let result = try await service.getDetail(sourceBean: source, vodId: "v-1")
+        let detail = try XCTUnwrap(result)
+        XCTAssertEqual(detail.id, home.homeVideos.first?.id)
+        XCTAssertEqual(detail.name, "电影 & A")
+        XCTAssertEqual(detail.des, "简介加粗结尾")
+        XCTAssertEqual(detail.playUrlMap["m3u8"]?.first?.url, "https://video.example/a.m3u8?literal=&amp;")
+    }
+
+    func testXMLRoutesRemainScopedToTheirVideoAndDecodeEntitiesOnce() throws {
+        let xml = """
+        <rss><list><video><id>a</id><name>A</name><dl>
+        <dd flag='m3u8'>正片$https://video.example/a.m3u8?x=1&amp;y=&#50;</dd>
+        <dd><![CDATA[备用$https://video.example/b.mp4]]></dd></dl></video>
+        <video><id>b</id><name>B</name></video></list></rss>
+        """
+        let response = try CMSXMLResponseParser.parse(Data(xml.utf8), sourceKey: "xml")
+        XCTAssertEqual(response.details.count, 2)
+        XCTAssertEqual(response.details[0].playUrlMap["m3u8"]?.first?.url, "https://video.example/a.m3u8?x=1&y=2")
+        XCTAssertEqual(response.details[0].playUrlMap["线路2"]?.first?.url, "https://video.example/b.mp4")
+        XCTAssertTrue(response.details[1].playFlags.isEmpty)
+        XCTAssertEqual(response.homeVideos.map(\.id), ["a", "b"])
+    }
+
 }

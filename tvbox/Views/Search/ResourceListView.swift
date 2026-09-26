@@ -21,25 +21,25 @@ struct ResourceListView: View {
         group.resources.filter { viewModel.states[$0.resourceID]?.isComplete == true }.count
     }
 
-    private var visibleResources: [Movie.Video] {
+    private func visibleResources(at date: Date) -> [Movie.Video] {
         let cloudKeys = Set(ApiConfig.shared.sourceBeanList.filter(\.isSearchOnly).map(\.key))
         return viewModel.sortedResources(group.resources.filter {
-            kind.includes($0, cloudSourceKeys: cloudKeys) && status.includes(viewModel.states[$0.resourceID])
-        })
+            kind.includes($0, cloudSourceKeys: cloudKeys) && status.includes(viewModel.states[$0.resourceID], at: date)
+        }, at: date)
     }
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 5)) { _ in
-            content
+        TimelineView(.periodic(from: .now, by: 5)) { context in
+            content(at: context.date)
         }
     }
 
-    private var content: some View {
+    private func content(at date: Date) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
-                summary
-                filters
-                if visibleResources.isEmpty {
+                summary(at: date)
+                filters(at: date)
+                if visibleResources(at: date).isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "line.3.horizontal.decrease.circle").font(.largeTitle)
                         Text(viewModel.isChecking ? "正在检查，暂时没有符合条件的资源" : "没有符合条件的资源")
@@ -53,8 +53,8 @@ struct ResourceListView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 32)
                 }
-                ForEach(visibleResources, id: \.resourceID) { video in
-                    resourceRow(video)
+                ForEach(visibleResources(at: date), id: \.resourceID) { video in
+                    resourceRow(video, at: date)
                 }
             }
             .padding(20)
@@ -78,7 +78,7 @@ struct ResourceListView: View {
         .onDisappear { viewModel.cancelChecking() }
     }
 
-    private var summary: some View {
+    private func summary(at date: Date) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label("\(group.resources.count) 个资源", systemImage: "square.stack.3d.up")
@@ -87,7 +87,7 @@ struct ResourceListView: View {
                 if !group.year.isEmpty { Text(group.year).foregroundStyle(.secondary) }
             }
             HStack {
-                Text("\(group.resources.filter { viewModel.states[$0.resourceID]?.isPlayable == true }.count) 个抽检可用")
+                Text("\(group.resources.filter { viewModel.states[$0.resourceID]?.isPlayable(at: date) == true }.count) 个抽检可用")
                     .foregroundStyle(.green)
                 Spacer()
                 Text("已检查 \(checkedCount)/\(group.resources.count)").foregroundStyle(.secondary)
@@ -104,7 +104,7 @@ struct ResourceListView: View {
         .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
     }
 
-    private var filters: some View {
+    private func filters(at date: Date) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle("只看抽检可用", isOn: Binding(
                 get: { status == .playable },
@@ -121,7 +121,7 @@ struct ResourceListView: View {
                 }
             }
             HStack {
-                Text("显示 \(visibleResources.count) 个").font(.caption).foregroundStyle(.secondary)
+                Text("显示 \(visibleResources(at: date).count) 个").font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Picker("检查状态", selection: $status) {
                     ForEach(ResourceStatusFilter.allCases) { Text($0.rawValue).tag($0) }
@@ -133,18 +133,18 @@ struct ResourceListView: View {
     }
 
     @ViewBuilder
-    private func resourceRow(_ video: Movie.Video) -> some View {
+    private func resourceRow(_ video: Movie.Video, at date: Date) -> some View {
         let state = viewModel.states[video.resourceID]
         if let info = state?.detail {
             NavigationLink {
                 DetailView(video: video, initialInfo: info, initialInfoCheckedAt: state?.checkedAt,
-                           preferredPlaybackFlag: state?.isPlayable == true ? info.playFlag : nil)
+                           preferredPlaybackFlag: state?.isPlayable(at: date) == true ? info.playFlag : nil)
             } label: {
-                ResourceRowView(video: video, sourceName: sourceName(video), state: state)
+                ResourceRowView(video: video, sourceName: sourceName(video), state: state, date: date)
             }.buttonStyle(.plain)
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                ResourceRowView(video: video, sourceName: sourceName(video), state: state)
+                ResourceRowView(video: video, sourceName: sourceName(video), state: state, date: date)
                 if state?.isComplete == true {
                     NavigationLink("打开详情并重试") { DetailView(video: video) }
                         .font(.callout)
@@ -164,17 +164,18 @@ struct ResourceRowView: View {
     let video: Movie.Video
     let sourceName: String
     let state: ResourceCheckState?
+    var date: Date = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var statusColor: Color {
-        if state?.isPlayable == true { return .green }
+        if state?.isPlayable(at: date) == true { return .green }
         if state?.detail != nil, state?.playback.isFailure != true { return .secondary }
         return state?.isComplete == true ? .orange : .secondary
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: state?.isPlayable == true ? "checkmark.circle.fill" : "play.rectangle")
+            Image(systemName: state?.isPlayable(at: date) == true ? "checkmark.circle.fill" : "play.rectangle")
                 .font(.title3)
                 .foregroundStyle(statusColor)
                 .frame(width: 32, height: 32)
@@ -185,12 +186,12 @@ struct ResourceRowView: View {
                 if ["夸克网盘", "阿里云盘", "123网盘"].contains(video.note) {
                     Text(video.note).font(.caption).foregroundStyle(.orange)
                 }
-                Text(state?.label ?? "等待检查…")
+                Text(state?.label(at: date) ?? "等待检查…")
                     .font(.caption)
                     .foregroundStyle(statusColor)
                     .fixedSize(horizontal: false, vertical: true)
                     .contentTransition(.opacity)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: state?.label)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: state?.label(at: date))
             }
             Spacer(minLength: 0)
             if state?.detail != nil {

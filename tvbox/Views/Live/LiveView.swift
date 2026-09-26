@@ -79,7 +79,17 @@ struct LiveView: View {
                     emptyState
                 } else {
                     // 播放器
-                    if selectedEngine == .vlc {
+                    if selectedEngine == .mpv {
+                        #if os(macOS) && canImport(Libmpv)
+                        if let url = viewModel.currentChannel?.currentUrl, !url.isEmpty {
+                            MPVPlayerView(urlString: url, isLive: true,
+                                          onPlaybackFailed: { handlePlaybackFailure(trigger: "mpv_error") },
+                                          onToggleFullScreen: { toggleWindowFullScreen() })
+                                .ignoresSafeArea()
+                                .id("mpv-live-\(url)-\(viewModel.currentChannel?.id ?? "")")
+                        }
+                        #endif
+                    } else if selectedEngine == .vlc {
                         if let urlString = viewModel.currentChannel?.currentUrl, !urlString.isEmpty {
                             VLCLivePlayerView(
                                 urlString: urlString,

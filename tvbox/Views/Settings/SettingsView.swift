@@ -26,6 +26,8 @@ struct SettingsView: View {
     
     @StateObject private var viewModel = SettingsViewModel()
     @StateObject private var apiConfig = ApiConfig.shared
+    @ObservedObject private var sourceVerification = SourceVerificationStore.shared
+    @StateObject private var verificationProbe = SourceVerificationProbe()
     @EnvironmentObject var appState: AppState
     @State private var showApiInput = false
     private enum ApiInputHost { case settings, savedConfigs }
@@ -535,7 +537,7 @@ struct SettingsView: View {
             LazyVStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("这里保存用户成功加载过的点播接口。", systemImage: "info.circle")
-                    Text("每项都会显示识别出的协议和适配状态。点击可切换，删除只会移出列表，不会立即中断正在播放的内容。")
+                    Text("协议支持、首页实测和播放实测分别记录。首页检测仅抽查部分分类；播放成功样本不代表全部影片可播放，记录仅反映当时结果。点击配置可切换。")
                 }
                 .font(.caption)
                 .foregroundColor(.white.opacity(0.6))
@@ -590,75 +592,79 @@ struct SettingsView: View {
                 }
 
                 ForEach(viewModel.savedVodConfigs) { config in
-                    HStack(alignment: .center, spacing: 0) {
-                        Button {
-                            configSwitchMessage = nil
-                            Task {
-                                await viewModel.loadSavedVodConfig(config)
-                                if viewModel.configSuccess {
-                                    appState.applyLoadedConfigState()
-                                    configSwitchMessage = "已切换配置，返回首页即可浏览新的内容。"
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(alignment: .center, spacing: 0) {
+                            Button {
+                                configSwitchMessage = nil
+                                Task {
+                                    await viewModel.loadSavedVodConfig(config)
+                                    if viewModel.configSuccess {
+                                        appState.applyLoadedConfigState()
+                                        configSwitchMessage = "已切换配置，返回首页即可浏览新的内容。"
+                                    }
                                 }
-                            }
-                        } label: {
-                            HStack(alignment: .top, spacing: 14) {
-                                Image(systemName: config.compatibility == .incompatible ? "exclamationmark.triangle" : "server.rack")
-                                    .foregroundColor(config.compatibility == .incompatible ? .red : .orange)
-                                .frame(width: 22)
+                            } label: {
+                                HStack(alignment: .top, spacing: 14) {
+                                    Image(systemName: config.compatibility == .incompatible ? "exclamationmark.triangle" : "server.rack")
+                                        .foregroundColor(config.compatibility == .incompatible ? .red : .orange)
+                                    .frame(width: 22)
 
-                                VStack(alignment: .leading, spacing: 7) {
-                                    HStack(spacing: 8) {
-                                        Text(config.name)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(.white)
-                                        if config.compatibility != .unknown {
-                                            Text(compatibilityLabel(for: config))
-                                                .font(.system(size: 10, weight: .bold))
-                                                .foregroundColor(config.compatibility == .compatible ? .green : .orange)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 3)
-                                                .background(Capsule().fill(Color.white.opacity(0.08)))
+                                    VStack(alignment: .leading, spacing: 7) {
+                                        HStack(spacing: 8) {
+                                            Text(config.name)
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundColor(.white)
+                                            Group {
+                                                Text(compatibilityLabel(for: config))
+                                                    .font(.system(size: 10, weight: .bold))
+                                                    .foregroundColor(config.compatibility == .compatible ? .green : .orange)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 3)
+                                                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                                            }
+                                        }
+                                        Text(config.configurationProtocol + protocolSuffix(for: config.sourceProtocols))
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white.opacity(0.55))
+                                        Text(SensitiveURLRedactor.redact(config.url))
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.white.opacity(0.35))
+                                            .lineLimit(1)
+                                    }
+
+                                    Spacer()
+
+                                    if ApiConfig.normalizeConfigUrl(viewModel.vodApiUrl)
+                                        == ApiConfig.normalizeConfigUrl(config.url) {
+                                        if viewModel.isLoadingConfig {
+                                            ProgressView().controlSize(.small)
+                                            Text("切换中…").font(.caption).foregroundColor(.orange)
+                                        } else {
+                                            Label("当前使用", systemImage: "checkmark.circle.fill")
+                                                .font(.caption)
+                                                .foregroundColor(.orange)
                                         }
                                     }
-                                    Text(config.configurationProtocol + protocolSuffix(for: config.sourceProtocols))
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.white.opacity(0.55))
-                                    Text(SensitiveURLRedactor.redact(config.url))
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.white.opacity(0.35))
-                                        .lineLimit(1)
                                 }
-
-                                Spacer()
-
-                                if ApiConfig.normalizeConfigUrl(viewModel.vodApiUrl)
-                                    == ApiConfig.normalizeConfigUrl(config.url) {
-                                    if viewModel.isLoadingConfig {
-                                        ProgressView().controlSize(.small)
-                                        Text("切换中…").font(.caption).foregroundColor(.orange)
-                                    } else {
-                                        Label("当前使用", systemImage: "checkmark.circle.fill")
-                                            .font(.caption)
-                                            .foregroundColor(.orange)
-                                    }
-                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(16)
+                                .contentShape(Rectangle())
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(16)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("savedConfig.\(config.id)")
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("savedConfig.\(config.id)")
 
-                        Button {
-                            viewModel.removeSavedVodConfig(config)
-                        } label: {
-                            Image(systemName: "trash")
-                                .foregroundColor(.white.opacity(0.45))
-                                .padding(8)
+                            Button {
+                                viewModel.removeSavedVodConfig(config)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .foregroundColor(.white.opacity(0.45))
+                                    .padding(8)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.trailing, 8)
                         }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 8)
+                        verificationSummary(for: config)
+                            .padding(.horizontal, 16).padding(.bottom, 16)
                     }
                     .glassCard(cornerRadius: 16)
                     .disabled(viewModel.isLoadingConfig)
@@ -714,6 +720,10 @@ struct SettingsView: View {
         }
         .background(AppTheme.primaryGradient.ignoresSafeArea())
         .navigationTitle("我的点播配置")
+        .onDisappear { if verificationProbe.checkingConfigID != nil { verificationProbe.stop() } }
+        .onChange(of: apiConfig.configUrl) { _, _ in
+            if verificationProbe.checkingConfigID != nil { verificationProbe.stop() }
+        }
         .overlay(multiRepoSelectionOverlay)
         .sheet(isPresented: apiInputPresentation(for: .savedConfigs), onDismiss: {
             if apiInputHost == .savedConfigs { viewModel.dismissConfigInspection() }
@@ -730,6 +740,67 @@ struct SettingsView: View {
         #endif
     }
 
+    private func verificationSummary(for config: SavedVodConfig) -> some View {
+        let report = sourceVerification.report(for: config.url)
+        let isCurrent = apiConfig.isLoaded && ApiConfig.normalizeConfigUrl(apiConfig.configUrl) == ApiConfig.normalizeConfigUrl(config.url)
+        let isChecking = verificationProbe.checkingConfigID == SourceVerificationStore.configID(config.url)
+        return VStack(alignment: .leading, spacing: 7) {
+            if let checkedAt = config.protocolCheckedAt {
+                Text("协议检测：\(checkedAt.formatted(date: .numeric, time: .shortened))")
+                    .foregroundStyle(.secondary)
+            }
+            Text(report?.homeSummary ?? "首页实测：未检测")
+            if let checkedAt = report?.lastHomeCheck {
+                Text("最近首页检测：\(checkedAt.formatted(date: .numeric, time: .shortened))")
+                    .foregroundStyle(.secondary)
+            }
+            Text(report?.playbackSummary ?? "播放实测：未验证")
+            if let playedAt = report?.lastPlayback {
+                Text("最近成功播放：\(playedAt.formatted(date: .numeric, time: .shortened))")
+                    .foregroundStyle(.secondary)
+            }
+            if isCurrent {
+                HStack {
+                    if isChecking {
+                        ProgressView().controlSize(.small)
+                        Text("本轮已测 \(verificationProbe.completedCount)/\(verificationProbe.totalCount)")
+                        Button("停止检测") { verificationProbe.stop() }
+                    } else {
+                        Button("检测首页") {
+                            Task { await verificationProbe.check(configURL: config.url, sources: apiConfig.sourceBeanList) }
+                        }
+                        .disabled(verificationProbe.checkingConfigID != nil)
+                    }
+                }
+                if let message = verificationProbe.message { Text(message).foregroundStyle(.secondary) }
+            } else {
+                Text("切换到此配置后可检测首页").foregroundStyle(.secondary)
+            }
+            if let report, report.checkedCount > 0 || report.playedCount > 0 {
+                DisclosureGroup("站点检测详情") {
+                    ForEach(report.sites) { site in
+                        let evidence = report.evidence[site.id]
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(site.name).fontWeight(.medium)
+                            Text(evidence?.home?.title ?? "首页未检测")
+                            if let time = evidence?.homeCheckedAt {
+                                Text(time.formatted(date: .numeric, time: .shortened)).foregroundStyle(.secondary)
+                            }
+                            if let time = evidence?.playedAt {
+                                Text("播放成功样本：\(time.formatted(date: .numeric, time: .shortened))")
+                            } else { Text("播放未验证").foregroundStyle(.secondary) }
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
+                    }
+                }
+            }
+            if sourceVerification.persistenceFailed {
+                Text("检测记录暂未保存到磁盘，本次结果仅在当前运行期间保留").foregroundStyle(.orange)
+            }
+        }
+        .font(.caption)
+        .buttonStyle(.bordered)
+    }
+
     private func protocolSuffix(for sourceProtocols: [String]) -> String {
         guard !sourceProtocols.isEmpty else { return "" }
         return " · " + sourceProtocols.joined(separator: " / ")
@@ -739,7 +810,7 @@ struct SettingsView: View {
         guard config.totalSourceCount > 0 else {
             return config.compatibility.title
         }
-        return "\(config.compatibility.title) \(config.supportedSourceCount)/\(config.totalSourceCount)"
+        return "协议支持 \(config.supportedSourceCount)/\(config.totalSourceCount)"
     }
 
     

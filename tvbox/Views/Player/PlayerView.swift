@@ -49,6 +49,7 @@ private struct MacOSPlayerView: NSViewRepresentable {
 @MainActor
 final class SystemPlayerSessionController: ObservableObject {
     let subtitles = SystemSubtitleController()
+    var isActuallyPlaying: Bool { player?.timeControlStatus == .playing }
     fileprivate var player: AVPlayer?
     fileprivate var mediaURLString: String?
     fileprivate var mediaHeaders: [String: String] = [:]
@@ -92,6 +93,7 @@ struct PlayerView: View {
     var onPlayNext: (() -> Void)? = nil
     var systemController: SystemPlayerSessionController? = nil
     var vlcController: VLCPlayerController? = nil
+    var mpvController: MPVPlayerController? = nil
     @AppStorage(HawkConfig.PLAY_TYPE_VOD) private var vodPlayTypeRaw = -1
     @AppStorage(HawkConfig.PLAY_TYPE) private var legacyPlayTypeRaw = PlayerEngine.system.rawValue
     
@@ -123,6 +125,15 @@ struct PlayerView: View {
                     onPlayNext: onPlayNext,
                     sharedController: systemController
                 )
+            case .mpv:
+                #if os(macOS) && canImport(Libmpv)
+                MPVPlayerView(urlString: urlString, headers: headers, startPosition: startPosition,
+                              onProgressChanged: onProgressChanged, onPlaybackEnded: onPlaybackEnded,
+                              onToggleFullScreen: onToggleFullScreen, canPlayNext: canPlayNext,
+                              onPlayNext: onPlayNext, sharedController: mpvController)
+                #else
+                Text("当前平台暂不支持 mpv")
+                #endif
             case .vlc:
                 VLCVodPlayerView(
                     urlString: urlString,
@@ -142,6 +153,7 @@ struct PlayerView: View {
             if selectedEngine != .system {
                 systemController?.stop()
             }
+            if selectedEngine != .mpv { mpvController?.stop() }
             if selectedEngine != .vlc {
                 vlcController?.stop()
             }
@@ -150,6 +162,7 @@ struct PlayerView: View {
             if newValue != .system {
                 systemController?.stop()
             }
+            if newValue != .mpv { mpvController?.stop() }
             if newValue != .vlc {
                 vlcController?.stop()
             }

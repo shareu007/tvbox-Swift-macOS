@@ -63,6 +63,7 @@ final class VLCPlayerController: NSObject, ObservableObject, VLCMediaPlayerDeleg
         return player
     }
     @Published var isPreparing = true
+    var isActuallyPlaying: Bool { isPlaying }
     @Published var isPlaying = false
     @Published var currentTimeSeconds: Double = 0
     @Published var durationSeconds: Double = 0
@@ -2031,6 +2032,7 @@ private final class IOSKeyCaptureView: UIView {
 #else
 
 final class VLCPlayerController: ObservableObject {
+    var isActuallyPlaying: Bool { false }
     func stop() {}
 }
 

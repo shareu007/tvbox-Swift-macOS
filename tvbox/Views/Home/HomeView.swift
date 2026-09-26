@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 首页 - 对应 Android 版 HomeActivity + UserFragment
 struct HomeView: View {
-    @StateObject private var viewModel = HomeViewModel()
+    @StateObject private var viewModel = HomeViewModel(snapshotStore: .shared)
     @EnvironmentObject var appState: AppState
     @State private var categoryScrollAnchorId: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -23,6 +23,20 @@ struct HomeView: View {
             VStack(spacing: 0) {
                 // 顶部栏
                 headerBar
+
+                if viewModel.isLoadingHome || viewModel.homeLoadMessage != nil {
+                    HStack {
+                        if viewModel.isLoadingHome { ProgressView().controlSize(.small) }
+                        Text(viewModel.homeLoadMessage ?? "正在更新首页…")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        if viewModel.isLoadingHome {
+                            Button("停止加载") { viewModel.stopHomeLoading() }
+                                .font(.caption)
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 6)
+                }
                 
                 if let message = viewModel.sourceRecoveryMessage {
                     HStack(spacing: 12) {

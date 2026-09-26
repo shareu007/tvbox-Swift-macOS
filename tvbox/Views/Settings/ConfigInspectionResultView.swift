@@ -8,7 +8,7 @@ struct ConfigInspectionResultView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Label("配置检测：\(result.compatibility.title)", systemImage: "checkmark.circle")
+            Label("协议检测：\(result.compatibility.title)", systemImage: result.supportedSourceCount > 0 ? "checkmark.circle" : "exclamationmark.circle")
                 .font(.headline)
             Text(result.message)
                 .font(.body)

@@ -234,4 +234,42 @@ final class HomeSourceRecoveryTests: XCTestCase {
         XCTAssertEqual(model.recommendationSections.first?.filters, ["year": "2024"])
     }
 
+    func testMovieRecommendationMixesLeafCategoriesWithoutDuplicates() async {
+        let current = source("mixed")
+        let categories = [MovieSort.SortData(id: "action", name: "动作片"), .init(id: "comedy", name: "喜剧片"), .init(id: "romance", name: "爱情片")]
+        let model = HomeViewModel(currentSource: { current }, fallbackSources: { [] }, selectHomeSource: { _ in }, sortLoader: { _ in (categories, []) }) { _, sort, _, _ in
+            [Movie.Video(id: "shared")] + (0..<12).map { Movie.Video(id: "\(sort.id)-\($0)") }
+        }
+        await model.refresh()
+        let videos = model.recommendationSections.first?.videos ?? []
+        XCTAssertTrue(videos.contains { $0.id.hasPrefix("comedy-") })
+        XCTAssertTrue(videos.contains { $0.id.hasPrefix("romance-") })
+        XCTAssertEqual(videos.count, Set(videos.map(\.id)).count)
+        XCTAssertLessThanOrEqual(videos.count, 24)
+    }
+
+    func testMixedMovieCategoriesKeepRemoteAndLocalYearFilteringSeparate() async {
+        let current = source("mixed-filter")
+        var action = MovieSort.SortData(id: "action", name: "动作片")
+        action.filters = [.init(key: "release", name: "年份", values: [.init(n: "2024", v: "y24")])]
+        let comedy = MovieSort.SortData(id: "comedy", name: "喜剧片")
+        var filteredRequests: [[String: String]] = []
+        let model = HomeViewModel(currentSource: { current }, fallbackSources: { [] }, selectHomeSource: { _ in },
+            sortLoader: { _ in ([action, comedy], []) }) { _, sort, _, filters in
+                if sort.id == "action" {
+                    filteredRequests.append(filters)
+                    return [Movie.Video(id: "remote-without-metadata")]
+                }
+                var current = Movie.Video(id: "comedy-2024")
+                current.year = "2024"
+                var old = Movie.Video(id: "comedy-2023")
+                old.year = "2023"
+                return [current, old]
+            }
+        await model.refresh()
+        await model.selectFilter(key: "year", value: "2024")?.value
+        XCTAssertTrue(filteredRequests.contains(["release": "y24"]))
+        XCTAssertEqual(Set(model.displayedVideos.map(\.id)), ["remote-without-metadata", "comedy-2024"])
+    }
+
 }

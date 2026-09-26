@@ -9,6 +9,10 @@ DerivedData/
 /build
 TVBox-*.dmg
 *.py
+!scripts/audit_macos_bundle.py
+!scripts/tests/test_audit_macos_bundle.py
+__pycache__/
+*.py[cod]
 /IOS-key
 /TVBox.ipa
 /ExportOptions.plist

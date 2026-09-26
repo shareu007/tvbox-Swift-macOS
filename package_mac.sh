@@ -28,7 +28,7 @@ verify_universal_binary() {
     echo "✅ ${label}: ${architectures}"
 }
 
-for command in xcodebuild xcodegen hdiutil codesign lipo; do
+for command in xcodebuild xcodegen hdiutil codesign lipo xcrun python3; do
     require_command "$command"
 done
 
@@ -63,6 +63,13 @@ if [[ "$(tr -d '[:space:]' < "${APP_PATH}/Contents/Resources/TVBoxPresets.json")
     echo "❌ Release App 意外包含了本机数据源预设" >&2
     exit 1
 fi
+
+# A Release build can retain N_OSO debug-map entries with local object paths.
+# Remove debug symbols before signing/distribution; keep the separate dSYM local.
+xcrun strip -S "${APP_PATH}/Contents/MacOS/TVBox"
+codesign --force --sign - --timestamp=none \
+    --entitlements tvbox/tvbox-macOS.entitlements "$APP_PATH"
+python3 scripts/audit_macos_bundle.py "$APP_PATH"
 
 codesign --verify --deep --strict "$APP_PATH"
 verify_universal_binary "${APP_PATH}/Contents/MacOS/TVBox" "TVBox 主程序"

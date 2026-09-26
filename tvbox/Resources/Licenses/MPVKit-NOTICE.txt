@@ -1,0 +1,27 @@
+TVBox macOS includes MPVKit 1.0.0 (the LGPL, non-GPL product).
+MPVKit bundles libmpv 0.41.0, FFmpeg n8.1.2 and supporting libraries.
+MPVKit and the bundled media libraries remain under their own licenses.
+The TVBox MIT license does not replace those component licenses.
+
+Package source, exact release, binary checksums and build scripts:
+https://github.com/mpvkit/MPVKit/tree/1.0.0
+Upstream library source and licensing:
+https://github.com/mpv-player/mpv
+https://github.com/FFmpeg/FFmpeg
+https://github.com/mpvkit/MPVKit/blob/1.0.0/README.md
+
+MPVKit-LICENSE.txt contains the package's LGPL v3 license.
+The Metal surface integration follows MPVKit's documented moltenvk embedding
+interface; the retained-canvas lifecycle and controller are implemented in TVBox.
+
+To rebuild TVBox with a modified library, replace the MPVKit package reference
+in project.yml with your local package (or fork), regenerate using XcodeGen,
+and build tvbox-macOS. The source distribution includes the application source
+and package_mac.sh; signing uses an ad-hoc identity and requires no private key.
+
+TVBox additionally compiles a modified mpv 0.41.0 CoreAudio output driver with
+the initialization cleanup fix from https://github.com/mpv-player/mpv/pull/18383.
+The driver, original headers, provenance and changes are included in the source
+distribution under Vendor/MPVCoreAudio. MPVCoreAudio-LICENSE.txt contains its
+LGPL 2.1 license; individual file notices continue to apply. This backport is
+specific to MPVKit 1.0.0 and must be reviewed when replacing the library.

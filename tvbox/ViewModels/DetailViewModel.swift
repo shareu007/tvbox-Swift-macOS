@@ -47,6 +47,9 @@ class DetailViewModel: ObservableObject {
     @Published var selectedQualityId: String = PlaybackQualityOption.autoIdentifier
     /// 播放器高频回调进度，不直接绑定 UI，避免高频刷新引发性能问题。
     private var realtimeProgressSeconds: Double = 0
+    private var verificationContext: SourceVerificationStore.Context?
+    private var playbackEvidence = PlaybackProgressEvidence()
+
     
     /// 数据服务与网络服务。
     private let sourceService = SourceService.shared
@@ -65,6 +68,14 @@ class DetailViewModel: ObservableObject {
     
     /// 加载视频详情
     func loadDetail(video: Movie.Video, initialInfo: VodInfo? = nil) async {
+        verificationContext = nil
+        playbackEvidence = PlaybackProgressEvidence()
+        let config = ApiConfig.shared
+        if config.isLoaded, !config.configUrl.isEmpty, let source = config.getSource(key: video.sourceKey) {
+            let store = SourceVerificationStore.shared
+            store.register(configURL: config.configUrl, sources: config.sourceBeanList)
+            verificationContext = store.context(configURL: config.configUrl, source: source)
+        }
         isLoading = true
         errorMessage = nil
         vodInfo = nil
@@ -193,6 +204,14 @@ class DetailViewModel: ObservableObject {
     }
     
     /// 播放器时间回调
+    func observePlaybackEvidence(seconds: Double, playing: Bool) {
+        guard let context = verificationContext, let url = playUrl, !url.isEmpty else { return }
+        let identity = "\(selectedFlag)|\(selectedEpisodeIndex)|\(url)"
+        if playbackEvidence.observe(playbackID: identity, seconds: seconds, playing: playing) {
+            SourceVerificationStore.shared.recordPlayback(context: context)
+        }
+    }
+
     func updatePlaybackProgress(seconds: Double) {
         guard seconds.isFinite else { return }
         realtimeProgressSeconds = max(seconds, 0)

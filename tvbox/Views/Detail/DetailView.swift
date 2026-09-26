@@ -13,6 +13,7 @@ struct DetailView: View {
     @StateObject private var viewModel = DetailViewModel()
     @StateObject private var sharedSystemController = SystemPlayerSessionController()
     @StateObject private var sharedVLCController = VLCPlayerController()
+    @StateObject private var sharedMPVController = MPVPlayerController()
     @EnvironmentObject var appState: AppState
     @Environment(\.modelContext) private var modelContext
     @State private var showFullScreen = false
@@ -44,7 +45,8 @@ struct DetailView: View {
                         canPlayNext: canPlayNextEpisode,
                         onPlayNext: playNextEpisodeIfNeeded,
                         systemController: sharedSystemController,
-                        vlcController: sharedVLCController
+                        vlcController: sharedVLCController,
+                        mpvController: sharedMPVController
                     )
                         .id("\(viewModel.selectedFlag)-\(viewModel.selectedEpisodeIndex)-\(url)")
                         .aspectRatio(16/9, contentMode: .fit)
@@ -121,6 +123,7 @@ struct DetailView: View {
             showFullScreen = false
             sharedSystemController.stop()
             sharedVLCController.stop()
+            sharedMPVController.stop()
             #if os(macOS)
             pendingMacWindowFullScreen = false
             appState.exitPlayerFullScreen()
@@ -139,6 +142,7 @@ struct DetailView: View {
                     onPlayNext: playNextEpisodeIfNeeded,
                     systemController: sharedSystemController,
                     vlcController: sharedVLCController,
+                    mpvController: sharedMPVController,
                     onCloseRequested: closeMacFullScreenOverlay
                 )
                 .ignoresSafeArea()
@@ -174,6 +178,7 @@ struct DetailView: View {
                     onPlayNext: playNextEpisodeIfNeeded,
                     systemController: sharedSystemController,
                     vlcController: sharedVLCController,
+                    mpvController: sharedMPVController,
                     onCloseRequested: {
                         isFullScreenDismissing = true
                         showFullScreen = false
@@ -515,6 +520,7 @@ struct DetailView: View {
     }
     
     private func handlePlaybackProgress(_ seconds: Double, _: Double?) {
+        viewModel.observePlaybackEvidence(seconds: seconds, playing: sharedSystemController.isActuallyPlaying || sharedVLCController.isActuallyPlaying || sharedMPVController.isActuallyPlaying)
         viewModel.updatePlaybackProgress(seconds: seconds)
         persistHistoryIfNeeded(force: false, currentProgress: seconds)
     }
@@ -634,6 +640,7 @@ struct FullScreenPlayerView: View {
     var onPlayNext: (() -> Void)? = nil
     var systemController: SystemPlayerSessionController? = nil
     var vlcController: VLCPlayerController? = nil
+    var mpvController: MPVPlayerController? = nil
     var onCloseRequested: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     
@@ -657,7 +664,8 @@ struct FullScreenPlayerView: View {
                 canPlayNext: canPlayNext,
                 onPlayNext: onPlayNext,
                 systemController: systemController,
-                vlcController: vlcController
+                vlcController: vlcController,
+                mpvController: mpvController
             )
                 .ignoresSafeArea()
             

@@ -7,6 +7,7 @@ enum PrivateSettingsStore {
         case vodURL = "vod-url"
         case liveURL = "live-url"
         case savedVodConfigs = "saved-vod-configs"
+        case sourceVerification = "source-verification"
         case spiderGatewayURL = "spider-gateway-url"
         case spiderGatewayToken = "spider-gateway-token"
     }

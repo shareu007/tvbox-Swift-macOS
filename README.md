@@ -6,7 +6,8 @@
 ## 主要功能
 
 - CMS JSON/XML 数据源（`type=0/1/4`）、分类、搜索、收藏、历史、直播。
-- AVPlayer 与 VLCKit 双播放内核，网盘资源支持清晰度选择。
+- AVPlayer、VLCKit，以及 macOS 内置 mpv 播放内核；网盘资源支持清晰度选择。
+- mpv 支持 VideoToolbox 硬解、字幕选择与时间偏移；实际解码状态显示在播放控制栏。
 - macOS 内置 CatVod Node Gateway，无需 Android 或单独启动服务。
 - 支持 CatVod `index.js` / `index.js.md5`、Basic Auth、校验、会话复用与自动回收。
 - 夸克、夸父、盘搜等网盘搜索协议；夸克网页登录获取 Cookie 并原生播放。
@@ -51,6 +52,9 @@ macOS Universal 2 DMG：
 
 默认产物为 ad-hoc 签名且未公证，公开下载时可能出现 Gatekeeper 提示。
 
+[下载 1.0.9 macOS DMG](https://github.com/shareu007/tvbox-Swift-macOS/releases/tag/v1.0.9)。
+此版本包含 mpv 音频设备通知导致的闪退修复；详见 [发布审查](docs/release-privacy-review-1.0.9.md)。
+
 iPhone / iPad Archive 或 IPA：
 
 ```sh
@@ -82,6 +86,6 @@ cp Config/Templates/ExportOptions.example.plist Config/Local/ExportOptions.plist
 
 ## License
 
-项目代码采用 [MIT License](LICENSE)。VLCKitSPM/VLCKit 和内置 Node.js 保留各自
+项目代码采用 [MIT License](LICENSE)。VLCKitSPM/VLCKit、MPVKit/mpv 和内置 Node.js 保留各自
 许可证，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。本项目仅供技术学习；
 不附带私人影视配置，使用者需自行承担第三方接口、内容版权与账号安全责任。

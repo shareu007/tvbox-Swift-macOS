@@ -110,7 +110,8 @@ class SourceService {
         
         if sourceBean.type == 0 {
             // XML 格式
-            return try CMSXMLResponseParser.parse(data, sourceKey: sourceBean.key)
+            let response = try CMSXMLResponseParser.parse(data, sourceKey: sourceBean.key)
+            return (response.sorts, response.homeVideos)
         } else {
             // JSON 格式 (type=1, type=4)
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -374,7 +375,7 @@ class SourceService {
     
     private func parseDetail(_ jsonStr: String, sourceKey: String, type: Int) throws -> VodInfo? {
         if type == 0 {
-            return parseXMLDetail(jsonStr, sourceKey: sourceKey)
+            return try CMSXMLResponseParser.parse(Data(jsonStr.utf8), sourceKey: sourceKey).details.first
         }
         
         guard let data = jsonStr.data(using: .utf8) else {
@@ -636,112 +637,6 @@ class SourceService {
         }
     }
 
-    private func parseXMLDetail(_ xml: String, sourceKey: String) -> VodInfo? {
-        guard let videoBlock = firstMatch(
-            pattern: #"<video[\s\S]*?</video>"#,
-            in: xml
-        ) else {
-            return nil
-        }
-        
-        let vodId = extractXMLTag("id", in: videoBlock)
-        guard !vodId.isEmpty else { return nil }
-        
-        var video = Movie.Video(id: vodId)
-        video.name = extractXMLTag("name", in: videoBlock)
-        video.pic = extractXMLTag("pic", in: videoBlock)
-        video.note = extractXMLTag("note", in: videoBlock)
-        video.year = extractXMLTag("year", in: videoBlock)
-        video.area = extractXMLTag("area", in: videoBlock)
-        video.type = extractXMLTag("type", in: videoBlock)
-        video.director = extractXMLTag("director", in: videoBlock)
-        video.actor = extractXMLTag("actor", in: videoBlock)
-        video.des = extractXMLTag("des", in: videoBlock)
-        video.sourceKey = sourceKey
-        
-        let ddNodes = extractXMLDDNodes(from: videoBlock)
-        let playFrom: String
-        let playUrl: String
-        
-        if ddNodes.isEmpty {
-            playFrom = "默认"
-            playUrl = ""
-        } else {
-            playFrom = ddNodes.map { $0.flag }.joined(separator: "$$$")
-            playUrl = ddNodes.map { $0.url }.joined(separator: "$$$")
-        }
-        
-        return VodInfo.from(video: video, playFrom: playFrom, playUrl: playUrl)
-    }
-    
-    private func extractXMLDDNodes(from block: String) -> [(flag: String, url: String)] {
-        guard let regex = try? NSRegularExpression(
-            pattern: #"<dd([^>]*)>([\s\S]*?)</dd>"#,
-            options: [.caseInsensitive]
-        ) else {
-            return []
-        }
-        
-        let nsRange = NSRange(block.startIndex..<block.endIndex, in: block)
-        let matches = regex.matches(in: block, range: nsRange)
-        var result: [(flag: String, url: String)] = []
-        
-        for (index, match) in matches.enumerated() {
-            guard match.numberOfRanges >= 3 else { continue }
-            guard let attrRange = Range(match.range(at: 1), in: block),
-                  let valueRange = Range(match.range(at: 2), in: block) else {
-                continue
-            }
-            
-            let attrs = String(block[attrRange])
-            let rawUrl = decodeXMLText(String(block[valueRange]))
-            guard !rawUrl.isEmpty else { continue }
-            
-            let flag = firstMatch(
-                pattern: #"flag\s*=\s*["']([^"']+)["']"#,
-                in: attrs,
-                captureGroup: 1
-            ) ?? "线路\(index + 1)"
-            result.append((flag: decodeXMLText(flag), url: rawUrl))
-        }
-        
-        return result
-    }
-    
-    private func extractXMLTag(_ tag: String, in content: String) -> String {
-        let escapedTag = NSRegularExpression.escapedPattern(for: tag)
-        let pattern = "<\(escapedTag)>\\s*([\\s\\S]*?)\\s*</\(escapedTag)>"
-        let value = firstMatch(pattern: pattern, in: content, captureGroup: 1) ?? ""
-        return decodeXMLText(value)
-    }
-    
-    private func firstMatch(pattern: String, in content: String, captureGroup: Int = 0) -> String? {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-            return nil
-        }
-        let range = NSRange(content.startIndex..<content.endIndex, in: content)
-        guard let match = regex.firstMatch(in: content, options: [], range: range),
-              match.numberOfRanges > captureGroup,
-              let subRange = Range(match.range(at: captureGroup), in: content) else {
-            return nil
-        }
-        return String(content[subRange])
-    }
-    
-    private func decodeXMLText(_ raw: String) -> String {
-        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if value.hasPrefix("<![CDATA["), value.hasSuffix("]]>"), value.count >= 12 {
-            value.removeFirst(9)
-            value.removeLast(3)
-        }
-        value = value.replacingOccurrences(of: "&amp;", with: "&")
-        value = value.replacingOccurrences(of: "&lt;", with: "<")
-        value = value.replacingOccurrences(of: "&gt;", with: ">")
-        value = value.replacingOccurrences(of: "&quot;", with: "\"")
-        value = value.replacingOccurrences(of: "&#39;", with: "'")
-        return value.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    
     private func buildURL(base: String, queryItems: [URLQueryItem]) throws -> String {
         let trimmedBase = base.trimmingCharacters(in: .whitespacesAndNewlines)
         guard var components = URLComponents(string: trimmedBase) else {

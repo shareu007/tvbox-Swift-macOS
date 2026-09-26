@@ -6,6 +6,7 @@ enum PlayerEngine: Int, CaseIterable, Identifiable {
     case system = 0
     /// VLC 内核（需编译时可导入 VLCKitSPM）。
     case vlc = 10
+    case mpv = 20
     
     var id: Int { rawValue }
     
@@ -16,6 +17,8 @@ enum PlayerEngine: Int, CaseIterable, Identifiable {
             return "系统播放器"
         case .vlc:
             return "VLC播放器"
+        case .mpv:
+            return "mpv播放器"
         }
     }
     
@@ -35,7 +38,16 @@ enum PlayerEngine: Int, CaseIterable, Identifiable {
         if isVLCAvailable {
             engines.append(.vlc)
         }
+        if isMPVAvailable { engines.append(.mpv) }
         return engines
+    }
+
+    static var isMPVAvailable: Bool {
+        #if os(macOS) && canImport(Libmpv)
+        return true
+        #else
+        return false
+        #endif
     }
     
     /// 从持久化值恢复播放器选项，并自动兜底到可用引擎。
@@ -44,7 +56,7 @@ enum PlayerEngine: Int, CaseIterable, Identifiable {
             return .system
         }
         
-        if engine == .vlc && !isVLCAvailable {
+        if !availableEngines.contains(engine) {
             return .system
         }
         
@@ -90,6 +102,11 @@ enum VideoDecodeMode: Int, CaseIterable, Identifiable {
         case .software:
             return "none"
         }
+    }
+
+    /// Apple VideoToolbox 优先；不支持的编码由 mpv 回退，实际状态读取 hwdec-current。
+    var mpvHardwareDecodeOption: String {
+        self == .software ? "no" : "videotoolbox"
     }
 }
 

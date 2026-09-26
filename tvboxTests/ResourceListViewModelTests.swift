@@ -3,6 +3,22 @@ import XCTest
 
 @MainActor
 final class ResourceListViewModelTests: XCTestCase {
+    func testExpiredVerificationLabelAgreesWithAvailableCount() async throws {
+        var date = Date()
+        let video = Movie.Video(id: "clock-regression")
+        let model = ResourceListViewModel(now: { date }, verifyPlayback: { _ in
+            .verified(flag: "direct", episode: "1")
+        }, loadDetail: { self.info(for: $0) })
+        await model.check([video], verifyPlayback: true)
+        date += 61
+        XCTAssertEqual(model.playableCount(in: [video], kind: .all, cloudSourceKeys: []), 0)
+        let state = try XCTUnwrap(model.states[video.resourceID])
+        XCTAssertEqual(state.label(at: date), "抽检结果已过时，请重新检查")
+        XCTAssertFalse(ResourceStatusFilter.playable.includes(state, at: date))
+        XCTAssertTrue(ResourceStatusFilter.pending.includes(state, at: date))
+        XCTAssertEqual(state.label(at: date.addingTimeInterval(-2)), "抽检可用 · direct · 1")
+    }
+
     func testPlayableResourcesSortBeforePendingAndFailuresWithStableTies() async {
         var date = Date(timeIntervalSince1970: 1000)
         let videos = ["failed", "pending", "good", "empty", "good2", "unseen"].map { Movie.Video(id: $0) }

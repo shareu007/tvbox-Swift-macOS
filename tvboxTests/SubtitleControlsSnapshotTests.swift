@@ -10,6 +10,10 @@ final class SubtitleControlsSnapshotTests: XCTestCase {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "subtitles", withExtension: "mp4"))
         try snapshot(AVPlayerContentView(urlString: url.absoluteString,
                                         onToggleFullScreen: {}, canPlayNext: true, onPlayNext: {}), name: "system")
+        #if canImport(Libmpv)
+        try snapshot(MPVPlayerView(urlString: url.absoluteString,
+                                  onToggleFullScreen: {}, canPlayNext: true, onPlayNext: {}), name: "mpv")
+        #endif
         #if canImport(VLCKitSPM)
         try snapshot(VLCVodPlayerView(urlString: url.absoluteString,
                                      onToggleFullScreen: {}, canPlayNext: true, onPlayNext: {}), name: "vlc")

@@ -9,17 +9,17 @@ enum ResourceStatusFilter: String, CaseIterable, Identifiable {
     case issues = "检查未通过"
     var id: Self { self }
 
-    func includes(_ state: ResourceCheckState?) -> Bool {
+    func includes(_ state: ResourceCheckState?, at date: Date = Date()) -> Bool {
         switch self {
         case .all: return true
         case .ready: return state?.detail != nil
-        case .playable: return state?.isPlayable == true
+        case .playable: return state?.isPlayable(at: date) == true
         case .pending:
             switch state {
             case nil, .checking: return true
             case .ready:
                 if case .needsPlayback = state?.playback { return true }
-                return state?.playback == .notChecked || (state?.playback.isVerified == true && state?.isPlayable != true)
+                return state?.playback == .notChecked || (state?.playback.isVerified == true && state?.isPlayable(at: date) != true)
             default: return false
             }
         case .issues:
@@ -73,14 +73,16 @@ enum ResourceCheckState {
         return true
     }
 
-    var label: String {
+    var label: String { label(at: Date()) }
+
+    func label(at date: Date) -> String {
         switch self {
         case .checking: return "正在检查剧集…"
         case .ready(let info, _, let verification):
             switch verification {
             case .notChecked: return "已找到剧集 · \(info.currentEpisodes.count) 集 · 尚未抽检播放"
             case .verified(let flag, let episode):
-                return isPlayable ? "抽检可用 · \(flag) · \(episode)" : "抽检结果已过时，请重新检查"
+                return isPlayable(at: date) ? "抽检可用 · \(flag) · \(episode)" : "抽检结果已过时，请重新检查"
             case .needsPlayback(let message): return "待播放确认：\(message)"
             case .failed(let message): return "播放抽检未通过：\(message)"
             }
@@ -122,14 +124,15 @@ final class ResourceListViewModel: ObservableObject {
         )
     }
 
-    func playableCount(in resources: [Movie.Video], kind: ResourceKindFilter, cloudSourceKeys: Set<String>) -> Int {
-        resources.filter {
-            kind.includes($0, cloudSourceKeys: cloudSourceKeys) && states[$0.resourceID]?.isPlayable(at: now()) == true
+    func playableCount(in resources: [Movie.Video], kind: ResourceKindFilter, cloudSourceKeys: Set<String>, at date: Date? = nil) -> Int {
+        let date = date ?? now()
+        return resources.filter {
+            kind.includes($0, cloudSourceKeys: cloudSourceKeys) && states[$0.resourceID]?.isPlayable(at: date) == true
         }.count
     }
 
-    func sortedResources(_ resources: [Movie.Video]) -> [Movie.Video] {
-        let date = now()
+    func sortedResources(_ resources: [Movie.Video], at date: Date? = nil) -> [Movie.Video] {
+        let date = date ?? now()
         return resources.enumerated().sorted { lhs, rhs in
             let left = states[lhs.element.resourceID]?.displayPriority(at: date) ?? 1
             let right = states[rhs.element.resourceID]?.displayPriority(at: date) ?? 1
@@ -137,8 +140,8 @@ final class ResourceListViewModel: ObservableObject {
         }.map(\.element)
     }
 
-    func sortedGroups(_ groups: [SearchResultGroup], kind: ResourceKindFilter, cloudSourceKeys: Set<String>) -> [SearchResultGroup] {
-        let date = now()
+    func sortedGroups(_ groups: [SearchResultGroup], kind: ResourceKindFilter, cloudSourceKeys: Set<String>, at date: Date? = nil) -> [SearchResultGroup] {
+        let date = date ?? now()
         let ranked = groups.enumerated().map { index, group in
             let rank = group.resources.filter { kind.includes($0, cloudSourceKeys: cloudSourceKeys) }
                 .map { states[$0.resourceID]?.displayPriority(at: date) ?? 1 }.min() ?? 1

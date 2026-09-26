@@ -138,12 +138,12 @@ struct SearchView: View {
     
     /// 搜索结果网格。
     private var searchResults: some View {
-        TimelineView(.periodic(from: .now, by: 5)) { _ in
-            searchResultsContent
+        TimelineView(.periodic(from: .now, by: 5)) { context in
+            searchResultsContent(at: context.date)
         }
     }
 
-    private var searchResultsContent: some View {
+    private func searchResultsContent(at date: Date) -> some View {
         VStack(spacing: 0) {
             if viewModel.isSearching {
                 HStack(spacing: 8) {
@@ -161,8 +161,8 @@ struct SearchView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     let groups = resourceChecks.sortedGroups(viewModel.filteredGroups, kind: viewModel.resourceKind,
-                        cloudSourceKeys: Set(ApiConfig.shared.sourceBeanList.filter(\.isSearchOnly).map(\.key))).filter { group in
-                        !onlyPlayable || playableCount(in: group) > 0
+                        cloudSourceKeys: Set(ApiConfig.shared.sourceBeanList.filter(\.isSearchOnly).map(\.key)), at: date).filter { group in
+                        !onlyPlayable || playableCount(in: group, at: date) > 0
                     }
                     Text("\(groups.count) 部影视 · \(groups.reduce(0) { $0 + $1.resources.count }) 个资源")
                         .font(.headline)
@@ -199,7 +199,7 @@ struct SearchView: View {
                             NavigationLink(value: group) {
                                 VStack(alignment: .leading, spacing: 6) {
                                     VodCardView(video: group.poster)
-                                    let count = playableCount(in: group)
+                                    let count = playableCount(in: group, at: date)
                                     Text(count > 0 ? "\(count) 个抽检可用" : "待确认播放")
                                         .font(.caption)
                                         .foregroundStyle(count > 0 ? Color.green : Color.secondary)
@@ -226,9 +226,9 @@ struct SearchView: View {
         }
     }
 
-    private func playableCount(in group: SearchResultGroup) -> Int {
+    private func playableCount(in group: SearchResultGroup, at date: Date) -> Int {
         resourceChecks.playableCount(in: group.resources, kind: viewModel.resourceKind,
-                                     cloudSourceKeys: Set(ApiConfig.shared.sourceBeanList.filter(\.isSearchOnly).map(\.key)))
+                                     cloudSourceKeys: Set(ApiConfig.shared.sourceBeanList.filter(\.isSearchOnly).map(\.key)), at: date)
     }
 
     private var availabilityControls: some View {
