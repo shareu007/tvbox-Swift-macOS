@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readBoundedJSON } from "./bounded-response.mjs";
+import { GatewayError } from "./errors.mjs";
 
 const CLOUD_PAN_API = "/spider/cloudpan/3";
 const DEFAULT_SEARCH_ENDPOINT = "https://so.252035.xyz/api/search";
@@ -209,13 +210,33 @@ async function quarkJSON(pathValue, {
 }) {
   const response = await fetchValue(new URL(pathValue, QUARK_API_BASE), {
     method,
+    redirect: "error",
+    signal: AbortSignal.timeout(15_000),
     headers: quarkHeaders(credentials?.quarkCookie || ""),
     ...(body === undefined ? {} : { body: JSON.stringify(body) })
   });
   updateQuarkCookie(credentials, response);
-  if (!response.ok) throw new Error(`夸克网盘返回 HTTP ${response.status}`);
+  const originalDownload = new URL(pathValue, QUARK_API_BASE).pathname.endsWith("/file/download");
+  if (!response.ok) {
+    // Quark reports its original-file size restriction as HTTP 400. Classify
+    // only this known endpoint/code; never expose the upstream diagnostic.
+    if (response.status === 400 && originalDownload) {
+      let failure;
+      try { failure = await readBoundedJSON(response); } catch { /* Keep the HTTP error. */ }
+      if (Number(failure?.code) === 23018) {
+        throw new GatewayError("CLOUD_ORIGINAL_SIZE_LIMIT", "夸克限制该文件的原画地址", 422);
+      }
+    }
+    try { await response.body?.cancel(); } catch { /* Ignore disposal errors. */ }
+    if ([401, 403].includes(response.status)) throw new GatewayError("CLOUD_AUTH_REQUIRED", "夸克登录已失效", 401);
+    if ([429, 503].includes(response.status)) throw new GatewayError("CLOUD_BUSY", "夸克暂时繁忙", 503);
+    throw new Error(`夸克网盘返回 HTTP ${response.status}`);
+  }
   const value = await readBoundedJSON(response);
   const apiCode = value?.code ?? value?.status;
+  if (originalDownload && Number(apiCode) === 23018) {
+    throw new GatewayError("CLOUD_ORIGINAL_SIZE_LIMIT", "夸克限制该文件的原画地址", 422);
+  }
   if (apiCode !== undefined && ![0, 200].includes(Number(apiCode))) {
     throw new Error(value?.message || value?.msg || `夸克网盘请求失败（${apiCode}）`);
   }
@@ -257,7 +278,7 @@ async function listQuarkFolder(share, stoken, folderId, credentials, fetchValue)
   return files;
 }
 
-async function collectQuarkVideos(share, stoken, credentials, fetchValue) {
+async function collectQuarkVideos(share, stoken, credentials, fetchValue, targetFileId) {
   const videos = [];
   const queue = [{ id: "0", prefix: "" }];
   const visited = new Set();
@@ -277,12 +298,82 @@ async function collectQuarkVideos(share, stoken, credentials, fetchValue) {
         videos.push({
           displayName: `${folder.prefix}${cleanText(file.file_name)}`,
           fileId: file.fid,
-          fileToken: file.share_fid_token || ""
+          fileToken: file.share_fid_token || "",
+          fileName: String(file.file_name || ""),
+          size: Number(file.size || 0)
         });
+        if (targetFileId && file.fid === targetFileId) return videos;
       }
     }
   }
   return videos;
+}
+
+const sourcePlaybackQueues = new WeakMap();
+
+export async function playQuarkSourceEpisode(file, credentials, fetchValue, originalFile) {
+  const owner = credentials.quarkCookie.match(/(?:^|;\s*)__pus=([^;]+)/)?.[1] || credentials.quarkCookie;
+  const resource = createHash("sha256").update(owner).update("\0").update(file.shareId)
+    .update("\0").update(file.fileId).digest("hex");
+  let queues = sourcePlaybackQueues.get(credentials);
+  if (!queues) { queues = new Map(); sourcePlaybackQueues.set(credentials, queues); }
+  const operation = (queues.get(resource) || Promise.resolve()).then(async () => {
+    const files = await collectQuarkVideos({ shareId: file.shareId }, file.stoken,
+      credentials, fetchValue, file.fileId);
+    const metadata = files.find(item => item.fileId === file.fileId);
+    if (!metadata) throw new Error("夸克分享中没有找到该剧集，请重新打开资源详情");
+    const verifiedFile = { ...file, ...metadata };
+    const savedFileId = await cachedQuarkSourceFile(verifiedFile, resource, credentials, fetchValue);
+    if (!originalFile) return quarkPlaybackForSavedFile(savedFileId, credentials, fetchValue);
+    try {
+      const body = await quarkJSON(`file/download?${QUARK_QUERY}`, {
+        body: { fids: [savedFileId] }, credentials, fetchValue
+      });
+      const entries = Array.isArray(body?.data) ? body.data : [];
+      const entry = entries.find(item => item?.fid === savedFileId)
+        || (entries.length === 1 && !entries[0]?.fid ? entries[0] : undefined);
+      const url = new URL(entry?.download_url);
+      if (url.protocol !== "https:" || url.username || url.password) {
+        throw new Error("夸克原画地址无效");
+      }
+      return { parse: 0, jx: 0, url: url.toString(),
+        header: quarkPlaybackHeaders(url.toString(), credentials.quarkCookie) };
+    } catch (error) {
+      if (error?.code !== "CLOUD_ORIGINAL_SIZE_LIMIT") throw error;
+      return { ...await quarkPlaybackForSavedFile(savedFileId, credentials, fetchValue),
+        playbackNotice: "quark-original-size-limit" };
+    }
+  });
+  const tail = operation.then(() => {}, () => {});
+  queues.set(resource, tail);
+  tail.then(() => { if (queues.get(resource) === tail) queues.delete(resource); });
+  return operation;
+}
+
+async function cachedQuarkSourceFile(file, resource, credentials, fetchValue) {
+  const name = `.TVBox源播放-${resource.slice(0, 24)}`;
+  const listing = await quarkJSON(`file/sort?${QUARK_QUERY}&pdir_fid=0&_page=1&_size=200&_sort=file_type:asc,updated_at:desc`, {
+    credentials, fetchValue
+  });
+  let directoryId = listing?.data?.list?.find(item => Number(item?.dir) === 1 && item.file_name === name)?.fid;
+  if (!directoryId) {
+    const created = await quarkJSON(`file?${QUARK_QUERY}`, {
+      body: { pdir_fid: "0", file_name: name, dir_path: "", dir_init_lock: false }, credentials, fetchValue
+    });
+    directoryId = created?.data?.fid;
+  }
+  if (!directoryId) throw new Error("无法创建夸克播放缓存目录");
+  const contents = await quarkJSON(`file/sort?${QUARK_QUERY}&pdir_fid=${encodeURIComponent(directoryId)}&_page=1&_size=200`, {
+    credentials, fetchValue
+  });
+  const files = contents?.data?.list || [];
+  if (files.length === 0) return saveQuarkShareFile(file, credentials, fetchValue, directoryId);
+  if (files.length === 1 && Number(files[0].dir || 0) === 0 && files[0].fid
+      && files[0].file_name === file.fileName && Number(files[0].size) === file.size) {
+    return files[0].fid;
+  }
+  // Never delete or overwrite files added by the user to this resource's folder.
+  throw new Error("夸克播放缓存内容与原文件不一致");
 }
 
 async function detailQuark(payload, credentials, fetchValue) {
@@ -388,9 +479,9 @@ async function clearQuarkCacheDirectory(directoryId, credentials, fetchValue) {
   });
 }
 
-async function saveQuarkShareFile(file, credentials, fetchValue) {
-  const directoryId = await ensureQuarkCacheDirectory(credentials, fetchValue);
-  await clearQuarkCacheDirectory(directoryId, credentials, fetchValue);
+async function saveQuarkShareFile(file, credentials, fetchValue, targetDirectoryId) {
+  const directoryId = targetDirectoryId || await ensureQuarkCacheDirectory(credentials, fetchValue);
+  if (!targetDirectoryId) await clearQuarkCacheDirectory(directoryId, credentials, fetchValue);
   const saved = await quarkJSON(`share/sharepage/save?${QUARK_QUERY}`, {
     body: {
       fid_list: [file.fileId],
@@ -424,6 +515,10 @@ async function playQuark(episodeID, credentials, fetchValue) {
   }
   const file = decodePayload(episodeID);
   const savedFileId = await saveQuarkShareFile(file, credentials, fetchValue);
+  return quarkPlaybackForSavedFile(savedFileId, credentials, fetchValue);
+}
+
+async function quarkPlaybackForSavedFile(savedFileId, credentials, fetchValue) {
   const body = await quarkJSON(`file/v2/play?${QUARK_QUERY}`, {
     body: {
       fid: savedFileId,

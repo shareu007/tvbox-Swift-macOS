@@ -326,7 +326,12 @@ struct HomeView: View {
             }
         }
         .navigationDestination(for: Movie.Video.self) { video in
-            DetailView(video: video)
+            if ApiConfig.shared.getSource(key: video.sourceKey)?.isRecommendationCatalog == true {
+                SearchView(initialKeyword: video.name, searchOnAppear: true,
+                           embeddedInNavigationStack: true)
+            } else {
+                DetailView(video: video)
+            }
         }
     }
 

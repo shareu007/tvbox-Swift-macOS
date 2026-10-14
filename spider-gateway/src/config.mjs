@@ -68,6 +68,10 @@ export function loadConfig(overrides = {}) {
   )) {
     throw new Error("CatVod bundle allowlist must be a string array");
   }
+  if (overrides.nodeBundleAllowChecksumRedirects !== undefined
+    && typeof overrides.nodeBundleAllowChecksumRedirects !== "boolean") {
+    throw new Error("CatVod checksum redirect setting must be a boolean");
+  }
 
   return {
     host,
@@ -82,6 +86,8 @@ export function loadConfig(overrides = {}) {
         ? process.env.CATVOD_BUNDLE_ALLOWED_URLS.split(",").map((value) => value.trim()).filter(Boolean)
         : DEFAULT_CATVOD_BUNDLES),
     nodeBundleAllowHTTP: boolean("CATVOD_BUNDLE_ALLOW_HTTP", false),
+    nodeBundleAllowChecksumRedirects: overrides.nodeBundleAllowChecksumRedirects
+      ?? boolean("CATVOD_BUNDLE_ALLOW_CHECKSUM_REDIRECTS", false),
     nodeBundleAllowPrivateNetwork: boolean("CATVOD_BUNDLE_ALLOW_PRIVATE_NETWORK", false),
     nodeBundleMaxBytes: integer("CATVOD_BUNDLE_MAX_BYTES", 16 * 1024 * 1024),
     nodeBundleDownloadTimeoutMs: integer("CATVOD_BUNDLE_DOWNLOAD_TIMEOUT_MS", 30_000),

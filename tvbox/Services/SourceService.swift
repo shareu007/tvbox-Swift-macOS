@@ -492,7 +492,7 @@ class SourceService {
     ) -> [SourceBean] {
         let maximumCount = max(1, limit)
         let eligible = sources.enumerated().filter {
-            $0.element.isSupportedInSwift && ($0.element.type == 3 || $0.element.isHttpApi)
+            $0.element.isSearchable && $0.element.isSupportedInSwift && ($0.element.type == 3 || $0.element.isHttpApi)
         }
         let homeKey = homeSource?.key
         var selected: [SourceBean] = []
@@ -516,6 +516,19 @@ class SourceService {
             return left.offset < right.offset
         }
 
+        // 分享目录与网盘聚合不同：它们可提供首页，但仍依赖网盘登录。
+        // 若配置将大量分享目录排在前面，按 2:1 取普通影视与分享目录，
+        // 避免 12 个搜索名额全部落到同一类需要登录的资源上。
+        let shareCatalogs = regularSources.filter(\.element.isCloudShareCatalog)
+        let streamingSources = regularSources.filter { !$0.element.isCloudShareCatalog }
+        var balancedRegularSources: [SourceBean] = []
+        for index in 0..<max(shareCatalogs.count, (streamingSources.count + 1) / 2) {
+            for streamingIndex in (index * 2)..<(index * 2 + 2) where streamingIndex < streamingSources.count {
+                balancedRegularSources.append(streamingSources[streamingIndex].element)
+            }
+            if index < shareCatalogs.count { balancedRegularSources.append(shareCatalogs[index].element) }
+        }
+
         var available = maximumCount - selected.count
         guard available > 0 else { return Array(selected.prefix(maximumCount)) }
 
@@ -523,7 +536,7 @@ class SourceService {
         let initialPanCount = panSources.isEmpty ? 0 : min(panSources.count, max(1, available / 3))
         selected.append(contentsOf: panSources.prefix(initialPanCount).map(\.element))
         available = maximumCount - selected.count
-        selected.append(contentsOf: regularSources.prefix(available).map(\.element))
+        selected.append(contentsOf: balancedRegularSources.prefix(available))
         available = maximumCount - selected.count
         if available > 0 {
             selected.append(

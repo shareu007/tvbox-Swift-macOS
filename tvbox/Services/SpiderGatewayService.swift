@@ -110,11 +110,20 @@ struct SpiderPlaybackQualityOption: Equatable {
     let url: String
 }
 
+enum SpiderPlaybackNotice: String {
+    case quarkOriginalSizeLimit = "quark-original-size-limit"
+
+    var message: String {
+        "夸克限制该文件的原画播放，已改用可用画质。"
+    }
+}
+
 struct SpiderPlaybackResult: Equatable {
     let url: String
     let headers: [String: String]
     let qualityOptions: [SpiderPlaybackQualityOption]
     var subtitles: [SourceSubtitle] = []
+    var notice: SpiderPlaybackNotice? = nil
 }
 
 /// type=3 的远程执行客户端。响应体使用 Spider 标准 JSON。
@@ -237,8 +246,14 @@ final class SpiderGatewayService {
             headers: sanitizedHeaders(object["header"]),
             qualityOptions: Self.playbackQualityOptions(from: object),
             subtitles: SourceSubtitleParser.parse(from: object, mediaURL: URL(string: url),
-                                            mediaHeaders: sanitizedHeaders(object["header"]))
+                                            mediaHeaders: sanitizedHeaders(object["header"])),
+            notice: Self.playbackNotice(from: object)
         )
+    }
+
+    static func playbackNotice(from object: [String: Any]) -> SpiderPlaybackNotice? {
+        guard let value = object["playbackNotice"] as? String else { return nil }
+        return SpiderPlaybackNotice(rawValue: value)
     }
 
     static func playbackQualityOptions(from object: [String: Any]) -> [SpiderPlaybackQualityOption] {

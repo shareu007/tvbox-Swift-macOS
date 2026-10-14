@@ -8,6 +8,7 @@ import { validateCatalogRequest, validateInvokeRequest } from "./request.mjs";
 import { WorkerManager } from "./worker-manager.mjs";
 import { cloudPanSite, handleCloudPanAction, isCloudPanSite } from "./cloud-pan.mjs";
 import { handlePanSearchAction, isPanSearchSite } from "./pan-search.mjs";
+import { resolveCatVodCloudPlayer } from "./catvod-cloud-player.mjs";
 
 function sendJSON(response, status, value) {
   const body = JSON.stringify(value);
@@ -112,6 +113,13 @@ export function createGateway(config, dependencies = {}) {
             : await handleCloudPanAction(options);
           sendJSON(response, 200, result);
           return;
+        }
+        if (invoke.action === "player") {
+          const cloudPlayer = await resolveCatVodCloudPlayer(invoke.arguments, cloudCredentials, trustedFetch);
+          if (cloudPlayer) {
+            sendJSON(response, 200, cloudPlayer);
+            return;
+          }
         }
         const artifact = await nodeBundleCache.resolve(invoke.site.jar);
         sendJSON(response, 200, await catVod.invoke(artifact, invoke.site, invoke.action, invoke.arguments));

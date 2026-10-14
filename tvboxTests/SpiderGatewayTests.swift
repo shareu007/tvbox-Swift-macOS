@@ -71,6 +71,63 @@ final class SpiderGatewayTests: XCTestCase {
         XCTAssertFalse(SpiderGatewayService.isCatVodBundleURL("file:///tmp/index.js"))
     }
 
+    func testRecommendationCatalogIsBrowsableWithoutAdvertisingResourceSearch() {
+        let source = SourceBean(key: "catalog", api: "/spider/douban/3",
+                                searchable: 1, quickSearch: 1, type: 3,
+                                jar: "https://example.com/index.js.md5")
+        XCTAssertTrue(source.isRecommendationCatalog)
+        XCTAssertFalse(source.isSearchable)
+        XCTAssertFalse(source.isQuickSearchEnabled)
+    }
+
+    func testRecommendationCatalogClassificationDoesNotUseDisplayName() {
+        let playable = SourceBean(name: "豆瓣", api: "/spider/playable/3", quickSearch: 1,
+                                  type: 3, jar: "https://example.com/index.js.md5")
+        XCTAssertFalse(playable.isRecommendationCatalog)
+        XCTAssertTrue(playable.isSearchable)
+        XCTAssertTrue(playable.isQuickSearchEnabled)
+        XCTAssertFalse(SourceBean(api: "/spider/douban/3", type: 4).isRecommendationCatalog)
+    }
+
+    func testDateNoticeAndDisabledSourcesDoNotConsumeSearchSlots() {
+        let notice = SourceBean(key: "notice", api: "/spider/gengxin/3", quickSearch: 1,
+                                type: 3, jar: SourceBean.cloudPanBundleURL)
+        let disabled = SourceBean(key: "disabled", api: "https://example.test/disabled", searchable: 0)
+        let movie = SourceBean(key: "movie", api: "https://example.test/movies")
+        XCTAssertFalse(notice.isSearchable)
+        XCTAssertEqual(SourceService.prioritizedSearchSources(
+            [notice, disabled, movie], homeSource: nil, limit: 1
+        ).map(\.key), [movie.key])
+    }
+
+    func testCatVodShareCatalogsCannotCrowdStreamingSourcesOutOfSearch() {
+        let shares = (0..<12).map {
+            SourceBean(key: "share-\($0)", api: "/spider/kuaiying/3", quickSearch: 1,
+                       type: 3, jar: SourceBean.cloudPanBundleURL)
+        }
+        let streaming = (0..<12).map {
+            SourceBean(key: "stream-\($0)", api: "/spider/appv7fixture\($0)/3", quickSearch: 1,
+                       type: 3, jar: SourceBean.cloudPanBundleURL)
+        }
+        let sources = SourceService.prioritizedSearchSources(
+            shares + streaming + [.cloudPan, .kkPanSearch], homeSource: shares[0], limit: 12
+        )
+        XCTAssertEqual(sources.count, 12)
+        XCTAssertEqual(sources.first?.key, shares[0].key)
+        XCTAssertTrue(sources.contains { $0.key == SourceBean.cloudPanKey })
+        XCTAssertTrue(sources.contains { $0.key == SourceBean.kkPanSearchKey })
+        XCTAssertGreaterThanOrEqual(sources.filter { $0.key.hasPrefix("stream-") }.count, 6)
+        XCTAssertGreaterThan(sources.filter { $0.key.hasPrefix("share-") }.count, 1)
+        XCTAssertEqual(Set(sources.map(\.key)).count, sources.count)
+    }
+
+    func testQuarkPlaybackNoticeIsKnownAndDoesNotDisplayArbitraryUpstreamText() {
+        XCTAssertEqual(SpiderGatewayService.playbackNotice(from: [
+            "playbackNotice": "quark-original-size-limit"
+        ]), .quarkOriginalSizeLimit)
+        XCTAssertNil(SpiderGatewayService.playbackNotice(from: ["playbackNotice": "remote-secret"]))
+    }
+
     func testSpiderPlaybackQualityOptionsAreParsedAndDeduplicated() {
         let options = SpiderGatewayService.playbackQualityOptions(from: [
             "qualityOptions": [
@@ -140,6 +197,7 @@ final class SpiderGatewayTests: XCTestCase {
         let cloudConfig = try XCTUnwrap(value["cloudConfig"] as? [String: String])
 
         XCTAssertEqual(value["token"] as? String, "ephemeral-token")
+        XCTAssertEqual(value["nodeBundleAllowChecksumRedirects"] as? Bool, true)
         XCTAssertEqual(cloudConfig["quarkCookie"], "private-cookie")
         XCTAssertEqual(
             value["nodeBundleAllowedURLs"] as? [String],

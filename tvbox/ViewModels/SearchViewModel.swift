@@ -33,7 +33,8 @@ class SearchViewModel: ObservableObject {
     private var searchTask: Task<Void, Never>?
     
     /// 初始化时同步加载本地历史记录，确保搜索页首次渲染即可展示。
-    init() {
+    init(keyword: String = "") {
+        self.keyword = keyword
         loadSearchHistory()
     }
 

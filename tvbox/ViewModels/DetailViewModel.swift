@@ -29,6 +29,7 @@ class DetailViewModel: ObservableObject {
     @Published var isLoading = false
     /// 错误提示。
     @Published var errorMessage: String?
+    @Published var playbackNotice: SpiderPlaybackNotice?
     /// 当前选中线路。
     @Published var selectedFlag: String = ""
     /// 当前选中剧集索引。
@@ -79,6 +80,7 @@ class DetailViewModel: ObservableObject {
         }
         isLoading = true
         errorMessage = nil
+        playbackNotice = nil
         vodInfo = nil
         defer { isLoading = false }
         
@@ -282,6 +284,7 @@ class DetailViewModel: ObservableObject {
         playbackResolveToken = token
         sourceSubtitles = []
         errorMessage = nil
+        playbackNotice = nil
 
         guard let sourceKey = vodInfo?.sourceKey,
               let source = ApiConfig.shared.getSource(key: sourceKey) else {
@@ -307,6 +310,7 @@ class DetailViewModel: ObservableObject {
                 guard !Task.isCancelled, playbackResolveToken == token else { return }
                 playbackHeaders = result.headers
                 sourceSubtitles = result.subtitles
+                playbackNotice = result.notice
                 if result.qualityOptions.count > 1 {
                     applySpiderQualityOptions(result.qualityOptions, automaticURL: result.url)
                 } else {

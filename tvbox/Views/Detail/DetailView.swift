@@ -74,6 +74,14 @@ struct DetailView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
                 
+                if let notice = viewModel.playbackNotice, viewModel.isPlaying {
+                    Label(notice.message, systemImage: "info.circle")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                }
+
                 // 线路选择
                 if viewModel.flags.count > 1 {
                     flagSelector

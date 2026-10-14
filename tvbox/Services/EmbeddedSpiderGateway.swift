@@ -205,7 +205,8 @@ final class EmbeddedSpiderGateway {
         let value: [String: Any] = [
             "token": authenticationToken,
             "cloudConfig": cloudConfig,
-            "nodeBundleAllowedURLs": allowedBundleURLs
+            "nodeBundleAllowedURLs": allowedBundleURLs,
+            "nodeBundleAllowChecksumRedirects": true
         ]
         let data: Data
         do {

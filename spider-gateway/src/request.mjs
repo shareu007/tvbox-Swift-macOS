@@ -1,7 +1,8 @@
 import { GatewayError } from "./errors.mjs";
 
 const ACTIONS = new Set(["home", "category", "detail", "search", "player"]);
-const CATVOD_API = /^\/spider\/[A-Za-z0-9_-]+\/\d{1,2}$/;
+// Require one Unicode provider segment and the actual end of the string.
+const CATVOD_API = /^\/spider\/[\p{L}\p{N}_-]+\/\d{1,2}(?![\s\S])/u;
 
 function requiredString(value, name, maximum = 4096) {
   if (typeof value !== "string" || value.trim() === "") {

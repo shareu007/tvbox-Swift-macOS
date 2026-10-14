@@ -31,16 +31,19 @@ enum CloudDriveLoginProvider: String, Identifiable {
 }
 
 enum CloudDriveLoginCredentialExtractor {
-    private static let quarkLoginCookieNames: Set<String> = [
-        "__puus", "__pus", "kps"
-    ]
-
     static func quarkCookie(from cookies: [HTTPCookie]) -> String? {
+        let now = Date()
         let quarkCookies = cookies.filter { cookie in
             let domain = cookie.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
-            return domain == "quark.cn" || domain.hasSuffix(".quark.cn")
+            return (domain == "quark.cn" || domain.hasSuffix(".quark.cn"))
+                && (cookie.expiresDate.map { $0 > now } ?? true)
         }
-        guard quarkCookies.contains(where: { quarkLoginCookieNames.contains($0.name.lowercased()) }) else {
+        // Identifier cookies can appear before QR login finishes. Wait for the
+        // authenticated session cookie instead of closing the login page early.
+        guard quarkCookies.contains(where: {
+            $0.name.lowercased() == "__puus"
+                && !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }) else {
             return nil
         }
 

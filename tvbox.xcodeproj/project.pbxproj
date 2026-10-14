@@ -1211,7 +1211,7 @@
 				CODE_SIGN_ENTITLEMENTS = "tvbox/tvbox-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 22;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/Vendor/MPVCoreAudio $(SRCROOT)/Vendor/MPVMoltenVK $(SRCROOT)/Vendor/MPVMoltenVK/include $(SRCROOT)/Vendor/MPVCoreAudio/options";
@@ -1294,7 +1294,7 @@
 				CODE_SIGN_ENTITLEMENTS = "tvbox/tvbox-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 22;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/Vendor/MPVCoreAudio $(SRCROOT)/Vendor/MPVMoltenVK $(SRCROOT)/Vendor/MPVMoltenVK/include $(SRCROOT)/Vendor/MPVCoreAudio/options";

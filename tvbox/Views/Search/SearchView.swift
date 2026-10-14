@@ -3,11 +3,21 @@ import SwiftUI
 /// 搜索页 - 对应 Android 版 SearchActivity
 struct SearchView: View {
     /// 搜索状态与结果管理。
-    @StateObject private var viewModel = SearchViewModel()
+    @StateObject private var viewModel: SearchViewModel
     @StateObject private var resourceChecks = ResourceListViewModel()
     @State private var onlyPlayable = false
+    @State private var didSubmitInitialSearch = false
+    private let searchOnAppear: Bool
+    private let embeddedInNavigationStack: Bool
+
+    init(initialKeyword: String = "", searchOnAppear: Bool = false,
+         embeddedInNavigationStack: Bool = false) {
+        _viewModel = StateObject(wrappedValue: SearchViewModel(keyword: initialKeyword))
+        self.searchOnAppear = searchOnAppear
+        self.embeddedInNavigationStack = embeddedInNavigationStack
+    }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    
+
     #if os(iOS)
     /// iOS 卡片网格参数。
     private let columns = [
@@ -19,46 +29,19 @@ struct SearchView: View {
         GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
     ]
     #endif
-    
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // 搜索栏
-                searchBar
-                
-                // 内容
-                if !viewModel.results.isEmpty {
-                    searchResults
-                } else if viewModel.isSearching {
-                    Spacer()
-                    ProgressView("正在搜索影视与网盘资源…")
-                        .tint(.orange)
-                    Text("网盘资源通常需要 10–20 秒")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 8)
-                    Spacer()
-                } else if viewModel.keyword.isEmpty {
-                    // 输入为空时显示历史；输入非空但无结果时显示提示文案。
-                    searchHistorySection
-                } else if let error = viewModel.errorMessage {
-                    Spacer()
-                    VStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.largeTitle)
-                            .foregroundColor(.gray)
-                        Text(error)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                }
+        Group {
+            if embeddedInNavigationStack {
+                searchContent
+            } else {
+                NavigationStack { searchContent }
             }
-            .background(Color(red: 0.08, green: 0.08, blue: 0.1))
-            .navigationTitle("搜索")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
+        }
+        .task {
+            guard searchOnAppear, !didSubmitInitialSearch else { return }
+            didSubmitInitialSearch = true
+            viewModel.submitSearch()
         }
         .onDisappear {
             viewModel.cancelSearch()
@@ -72,9 +55,49 @@ struct SearchView: View {
             resourceChecks.retainResults(viewModel.results)
         }
     }
-    
+
+    private var searchContent: some View {
+        VStack(spacing: 0) {
+            // 搜索栏
+            searchBar
+
+            // 内容
+            if !viewModel.results.isEmpty {
+                searchResults
+            } else if viewModel.isSearching {
+                Spacer()
+                ProgressView("正在搜索影视与网盘资源…")
+                    .tint(.orange)
+                Text("网盘资源通常需要 10–20 秒")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 8)
+                Spacer()
+            } else if viewModel.keyword.isEmpty {
+                // 输入为空时显示历史；输入非空但无结果时显示提示文案。
+                searchHistorySection
+            } else if let error = viewModel.errorMessage {
+                Spacer()
+                VStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.largeTitle)
+                        .foregroundColor(.gray)
+                    Text(error)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+        }
+        .background(Color(red: 0.08, green: 0.08, blue: 0.1))
+        .navigationTitle("搜索")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+    }
+
     // MARK: - 搜索栏
-    
+
     /// 顶部搜索输入区。
     private var searchBar: some View {
         HStack(spacing: 12) {
@@ -82,7 +105,7 @@ struct SearchView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white.opacity(0.8))
-                
+
                 TextField("搜索影片...", text: $viewModel.keyword)
                     .textFieldStyle(.plain)
                     .font(.system(size: 16))
@@ -94,7 +117,7 @@ struct SearchView: View {
                     #if os(iOS)
                     .autocapitalization(.none)
                     #endif
-                
+
                 if !viewModel.keyword.isEmpty {
                     Button {
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
@@ -115,7 +138,7 @@ struct SearchView: View {
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(LinearGradient(colors: [.orange.opacity(0.5), .clear], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
             )
-            
+
             Button {
                 viewModel.submitSearch()
             } label: {
@@ -133,9 +156,9 @@ struct SearchView: View {
         .padding(.top, 20)
         .padding(.bottom, 10)
     }
-    
+
     // MARK: - 搜索结果
-    
+
     /// 搜索结果网格。
     private var searchResults: some View {
         TimelineView(.periodic(from: .now, by: 5)) { context in
@@ -255,9 +278,9 @@ struct SearchView: View {
             .frame(minHeight: 32)
         }
     }
-    
+
     // MARK: - 搜索历史
-    
+
     /// 搜索历史区域，支持复用历史关键词与一键清空。
     private var searchHistorySection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -280,7 +303,7 @@ struct SearchView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
-                
+
                 FlowLayout(spacing: 8) {
                     ForEach(viewModel.searchHistory, id: \.self) { keyword in
                         Button {
@@ -300,7 +323,7 @@ struct SearchView: View {
                 }
                 .padding(.horizontal, 20)
             }
-            
+
             Spacer()
         }
     }
@@ -310,13 +333,13 @@ struct SearchView: View {
 struct FlowLayout: Layout {
     /// 子项间距。
     var spacing: CGFloat = 8
-    
+
     /// 计算整体尺寸。
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let result = arrangement(proposal: proposal, subviews: subviews)
         return result.size
     }
-    
+
     /// 按计算结果放置子视图。
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let result = arrangement(proposal: ProposedViewSize(width: bounds.width, height: bounds.height), subviews: subviews)
@@ -324,7 +347,7 @@ struct FlowLayout: Layout {
             subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
         }
     }
-    
+
     /// 核心排版算法：按最大宽度逐个放置，超宽后自动换行。
     private func arrangement(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
         let maxWidth = proposal.width ?? .infinity
@@ -333,7 +356,7 @@ struct FlowLayout: Layout {
         var currentY: CGFloat = 0
         var lineHeight: CGFloat = 0
         var maxX: CGFloat = 0
-        
+
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
             if currentX + size.width > maxWidth && currentX > 0 {
@@ -346,7 +369,7 @@ struct FlowLayout: Layout {
             currentX += size.width + spacing
             maxX = max(maxX, currentX)
         }
-        
+
         return (CGSize(width: maxX, height: currentY + lineHeight), positions)
     }
 }

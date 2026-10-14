@@ -50,10 +50,14 @@ function parseBundleURL(value, allowCredentials = false) {
   return { url, authorization };
 }
 
-function assertAllowedURL(url, allowedURLs, allowHTTP) {
+function assertAllowedProtocol(url, allowHTTP) {
   if (url.protocol !== "https:" && !allowHTTP) {
     throw new GatewayError("INVALID_BUNDLE_URL", "Allowlisted CatVod bundles must use HTTPS", 400);
   }
+}
+
+function assertAllowedURL(url, allowedURLs, allowHTTP) {
+  assertAllowedProtocol(url, allowHTTP);
   if (!allowedURLs.includes(url.toString())) {
     throw new GatewayError("BUNDLE_URL_NOT_ALLOWED", "CatVod bundle URL is not in the allowlist", 403);
   }
@@ -79,6 +83,7 @@ export class NodeBundleCache {
       (value) => parseBundleURL(value, true).url.toString()
     );
     this.allowHTTP = options.nodeBundleAllowHTTP === true;
+    this.allowChecksumRedirects = options.nodeBundleAllowChecksumRedirects === true;
     this.allowPrivateNetwork = options.nodeBundleAllowPrivateNetwork === true;
     this.fetchValue = options.fetchValue || fetch;
     this.maxBytes = options.nodeBundleMaxBytes;
@@ -160,7 +165,10 @@ export class NodeBundleCache {
 
     const temporaryPath = path.join(this.cacheDir, `.${cacheKey}.${randomUUID()}.part`);
     try {
-      const result = await this.#download(bundleURL, temporaryPath, parsed.authorization);
+      const result = await this.#download(
+        bundleURL, temporaryPath, parsed.authorization,
+        this.allowChecksumRedirects && expectedMD5 !== null
+      );
       if (expectedMD5 && result.md5 !== expectedMD5) {
         throw new GatewayError("BUNDLE_CHECKSUM_MISMATCH", "CatVod bundle checksum does not match", 422);
       }
@@ -182,8 +190,8 @@ export class NodeBundleCache {
     return buffer.toString("utf8");
   }
 
-  async #download(initialURL, destination, authorization) {
-    const response = await this.#fetch(initialURL, authorization);
+  async #download(initialURL, destination, authorization, allowChecksumRedirects) {
+    const response = await this.#fetch(initialURL, authorization, allowChecksumRedirects);
     const declared = Number.parseInt(response.headers.get("content-length") || "0", 10);
     if (declared > this.maxBytes) throw new GatewayError("BUNDLE_TOO_LARGE", "CatVod bundle exceeds the size limit", 413);
     const file = await open(destination, "wx", 0o600);
@@ -205,7 +213,7 @@ export class NodeBundleCache {
     return { sha256: sha256.digest("hex"), md5: md5.digest("hex") };
   }
 
-  async #fetch(initialURL, authorization) {
+  async #fetch(initialURL, authorization, allowChecksumRedirects = false) {
     let currentURL = initialURL;
     const credentialOrigin = initialURL.origin;
     for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
@@ -227,7 +235,17 @@ export class NodeBundleCache {
         if (!location || redirects === MAX_REDIRECTS) throw new GatewayError("BUNDLE_REDIRECT_FAILED", "Invalid CatVod redirect", 502);
         await response.body?.cancel().catch(() => {});
         const redirected = parseBundleURL(new URL(location, currentURL).toString());
-        assertAllowedURL(redirected.url, this.allowedURLs, this.allowHTTP);
+        if (allowChecksumRedirects && currentURL.protocol === "https:" && redirected.url.protocol === "http:") {
+          throw new GatewayError("INVALID_BUNDLE_URL", "CatVod redirects must not downgrade HTTPS", 400);
+        }
+        if (allowChecksumRedirects && !this.allowedURLs.includes(redirected.url.toString())) {
+          // The allowlisted manifest pins the complete downloaded bytes before
+          // execution. Only its script may follow CDN redirects; manifests and
+          // unchecked .js entries retain the exact URL allowlist.
+          assertAllowedProtocol(redirected.url, this.allowHTTP);
+        } else {
+          assertAllowedURL(redirected.url, this.allowedURLs, this.allowHTTP);
+        }
         currentURL = redirected.url;
         continue;
       }

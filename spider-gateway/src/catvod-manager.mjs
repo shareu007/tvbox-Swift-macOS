@@ -154,7 +154,12 @@ export class CatVodManager {
   }
 
   async invoke(artifact, site, action, argumentsValue) {
-    const result = await (await this.#session(artifact)).request({ type: "invoke", site, action, arguments: argumentsValue });
+    // The parent resolves site.jar; it may contain private bundle credentials.
+    // Remote code needs only the provider route and its initialization value.
+    const runnerSite = { key: site.key, api: site.api, ext: site.ext || "" };
+    const result = await (await this.#session(artifact)).request({
+      type: "invoke", site: runnerSite, action, arguments: argumentsValue
+    });
     if (!result || typeof result !== "object" || Array.isArray(result)) {
       throw new GatewayError("INVALID_CATVOD_RESPONSE", "CatVod result must be a JSON object", 502);
     }

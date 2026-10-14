@@ -30,6 +30,27 @@ final class CloudDriveLoginCredentialExtractorTests: XCTestCase {
         XCTAssertNil(CloudDriveLoginCredentialExtractor.quarkCookie(from: [cookie]))
     }
 
+    func testQuarkCookieWaitsForAuthenticatedSessionInsteadOfPreloginIdentifiers() throws {
+        let cookies = try ["__pus", "kps", "__kps"].map { name in
+            try XCTUnwrap(HTTPCookie(properties: [
+                .domain: ".quark.cn", .path: "/", .name: name, .value: "prelogin-value"
+            ]))
+        }
+        XCTAssertNil(CloudDriveLoginCredentialExtractor.quarkCookie(from: cookies))
+    }
+
+    func testQuarkCookieRejectsEmptyOrExpiredSessionMarkers() throws {
+        let empty = try XCTUnwrap(HTTPCookie(properties: [
+            .domain: ".quark.cn", .path: "/", .name: "__puus", .value: ""
+        ]))
+        let expired = try XCTUnwrap(HTTPCookie(properties: [
+            .domain: ".quark.cn", .path: "/", .name: "__puus", .value: "expired-value",
+            .expires: Date(timeIntervalSince1970: 1)
+        ]))
+        XCTAssertNil(CloudDriveLoginCredentialExtractor.quarkCookie(from: [empty]))
+        XCTAssertNil(CloudDriveLoginCredentialExtractor.quarkCookie(from: [expired]))
+    }
+
     func testAliRefreshTokenFindsNestedToken() {
         let values = [
             "plain text",

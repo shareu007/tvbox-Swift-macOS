@@ -413,10 +413,42 @@ final class ImageLoader {
     private static let maxImageRetries = 1
     private static let imageRetryDelay: TimeInterval = 1.0
     
-    func load(url: URL) async throws -> PlatformImage {
+    /// CatVod may return a desktop client's virtual imageProxy URL. Fetch its
+    /// original image ourselves instead of depending on that client's listener.
+    static func makeImageRequest(url: URL) throws -> URLRequest {
+        guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host != nil else {
+            throw ImageLoadError.invalidURL
+        }
+        var imageURL = url
+        var sourceHeaders: [String: String] = [:]
+        let host = url.host?.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        if url.path == "/imageProxy", ["localhost", "127.0.0.1", "::1"].contains(host ?? "") {
+            guard url.user == nil, url.password == nil,
+                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  let items = components.queryItems, items.count <= 16,
+                  items.filter({ $0.name == "url" }).count == 1,
+                  items.filter({ $0.name == "customHeaders" }).count <= 1,
+                  let address = items.first(where: { $0.name == "url" })?.value,
+                  address.utf8.count <= 8192, let target = URL(string: address),
+                  ["http", "https"].contains(target.scheme?.lowercased() ?? ""),
+                  target.host != nil else { throw ImageLoadError.invalidURL }
+            let targetHost = target.host?.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+            guard !(target.path == "/imageProxy" && ["localhost", "127.0.0.1", "::1"].contains(targetHost ?? "")) else {
+                throw ImageLoadError.invalidURL
+            }
+            imageURL = target
+            if let rawHeaders = items.first(where: { $0.name == "customHeaders" })?.value {
+                guard rawHeaders.utf8.count <= 32_768,
+                      let data = rawHeaders.data(using: .utf8),
+                      let headers = try? JSONSerialization.jsonObject(with: data) as? [String: String] else {
+                    throw ImageLoadError.invalidURL
+                }
+                sourceHeaders = SourceSubtitleParser.safeHeaders(headers)
+            }
+        }
         let prepared: (url: URL, authorization: String?)
         do {
-            prepared = try NetworkManager.prepareURL(from: url.absoluteString)
+            prepared = try NetworkManager.prepareURL(from: imageURL.absoluteString)
         } catch {
             throw ImageLoadError.invalidURL
         }
@@ -426,13 +458,20 @@ final class ImageLoader {
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             forHTTPHeaderField: "User-Agent"
         )
-        if let authorization = prepared.authorization {
-            request.setValue(authorization, forHTTPHeaderField: "Authorization")
-        }
         if let host = prepared.url.host {
             request.setValue("https://\(host)/", forHTTPHeaderField: "Referer")
         }
-        
+        for (name, value) in sourceHeaders {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
+        if let authorization = prepared.authorization {
+            request.setValue(authorization, forHTTPHeaderField: "Authorization")
+        }
+        return request
+    }
+
+    func load(url: URL) async throws -> PlatformImage {
+        let request = try Self.makeImageRequest(url: url)
         var lastError: Error = ImageLoadError.invalidData
         let totalAttempts = Self.maxImageRetries + 1
         
