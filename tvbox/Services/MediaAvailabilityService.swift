@@ -1,30 +1,65 @@
 import Foundation
 
-/// 只读抽检：不调用可能转存网盘文件的 player 接口，不下载完整媒体。
+/// 抽检媒体的少量字节。普通 CatVod 可只读解析；网盘转存留给实际播放。
 struct MediaAvailabilityService {
     typealias SampleLoader = (URL) async throws -> (Data, HTTPURLResponse)
+    typealias RequestSampleLoader = (URLRequest) async throws -> (Data, HTTPURLResponse)
+    typealias PlayerResolver = (String, String) async throws -> SpiderPlaybackResult
     static let maximumSampleBytes = 8 * 1024
-    private let sample: SampleLoader
+    private let sample: RequestSampleLoader
 
-    init(sample: @escaping SampleLoader = Self.readSample) {
-        self.sample = sample
+    init() {
+        sample = { try await Self.readSample($0, configuration: .ephemeral) }
+    }
+
+    init(sample: @escaping SampleLoader) {
+        self.sample = { try await sample($0.url!) }
+    }
+
+    init(sampleRequest: @escaping RequestSampleLoader) {
+        sample = sampleRequest
+    }
+
+    func verify(info: VodInfo, source: SourceBean, resolvePlayer: PlayerResolver) async throws -> ResourcePlaybackVerification {
+        guard !source.isSearchOnly else { return .needsPlayback("网盘资源需要登录后播放确认") }
+        return try await verifyRoutes(info: info) { flag, episode in
+            if source.type == 3 && source.api.hasPrefix("/spider/") {
+                if source.isCloudShareCatalog && !Self.isDirectMediaURL(episode.url) {
+                    throw SpiderGatewayError.playbackVerificationRequired
+                }
+                let result = try await resolvePlayer(flag, episode.url)
+                guard let url = URL(string: result.url), Self.canRead(url) else { return nil }
+                var request = URLRequest(url: url)
+                SourceSubtitleParser.safeHeaders(result.headers).forEach { request.setValue($1, forHTTPHeaderField: $0) }
+                return request
+            }
+            guard let url = URL(string: episode.url), Self.canRead(url) else { return nil }
+            return URLRequest(url: url)
+        }
     }
 
     func verify(info: VodInfo, requiresPlayerResolution: Bool) async throws -> ResourcePlaybackVerification {
         if requiresPlayerResolution {
             return .needsPlayback("目录有效，需要登录或播放器解析后确认")
         }
+        return try await verifyRoutes(info: info) { _, episode in
+            guard let url = URL(string: episode.url), Self.canRead(url) else { return nil }
+            return URLRequest(url: url)
+        }
+    }
+
+    private func verifyRoutes(info: VodInfo, route: (String, VodInfo.Episode) async throws -> URLRequest?) async throws -> ResourcePlaybackVerification {
         var lastFailure: String?
         var needsPlayback: String?
         for flag in info.playFlags.prefix(3) {
             try Task.checkCancellation()
             guard let episode = info.playUrlMap[flag]?.first else { continue }
-            guard let url = URL(string: episode.url), Self.canRead(url) else {
-                needsPlayback = "该线路需要播放器解析"
-                continue
-            }
             do {
-                switch try await inspect(url, depth: 0) {
+                guard let request = try await route(flag, episode) else {
+                    needsPlayback = "该线路需要播放器进一步解析"
+                    continue
+                }
+                switch try await inspect(request, depth: 0) {
                 case .verified:
                     return .verified(flag: flag, episode: episode.name)
                 case .needsPlayback(let reason): needsPlayback = reason
@@ -33,7 +68,12 @@ struct MediaAvailabilityService {
                 }
             } catch {
                 try Task.checkCancellation()
-                if let error = error as? URLError, error.code == .timedOut {
+                if let error = error as? SpiderGatewayError,
+                   case .playbackVerificationRequired = error {
+                    needsPlayback = "网盘资源需要登录后播放确认"
+                } else if let error = error as? SpiderGatewayError, case .parseNotSupported = error {
+                    needsPlayback = "该线路需要网页解析后播放确认"
+                } else if let error = error as? URLError, error.code == .timedOut {
                     lastFailure = "连接超时，可重新检查"
                 } else {
                     lastFailure = "暂时无法读取媒体，可重试或在播放器中确认"
@@ -44,9 +84,10 @@ struct MediaAvailabilityService {
         return .failed(lastFailure ?? "没有可抽检的播放线路")
     }
 
-    private func inspect(_ url: URL, depth: Int) async throws -> ResourcePlaybackVerification {
+    private func inspect(_ request: URLRequest, depth: Int) async throws -> ResourcePlaybackVerification {
+        guard let url = request.url else { return .needsPlayback("媒体地址无效") }
         guard depth <= 2, Self.canRead(url) else { return .needsPlayback("播放清单需要播放器进一步解析") }
-        let (data, response) = try await sample(url)
+        let (data, response) = try await sample(request)
         try Task.checkCancellation()
         guard (200...299).contains(response.statusCode) else {
             switch response.statusCode {
@@ -68,7 +109,11 @@ struct MediaAvailabilityService {
                 return .needsPlayback("清单中暂未找到可抽检片段")
             }
             // 必须实际读取子清单/片段，单个可访问的 m3u8 不算可用。
-            return try await inspect(target, depth: depth + 1)
+            guard let next = Self.redirectRequest(URLRequest(url: target), from: response.url ?? url,
+                                                 headers: Self.headers(request, scopedTo: response.url ?? url)) else {
+                return .needsPlayback("播放清单需要播放器进一步解析")
+            }
+            return try await inspect(next, depth: depth + 1)
         }
         let lower = text.prefix(100).lowercased()
         if lower.hasPrefix("<!doctype html") || lower.hasPrefix("<html") || response.mimeType == "text/html" {
@@ -94,9 +139,31 @@ struct MediaAvailabilityService {
 
     static func hasDirectMediaRoute(_ info: VodInfo) -> Bool {
         info.playFlags.prefix(3).contains { flag in
-            guard let episode = info.playUrlMap[flag]?.first, let url = URL(string: episode.url), canRead(url) else { return false }
-            return ["m3u8", "mp4", "m4v", "mov", "mkv", "webm", "flv", "ts"].contains(url.pathExtension.lowercased())
+            guard let episode = info.playUrlMap[flag]?.first else { return false }
+            return isDirectMediaURL(episode.url)
         }
+    }
+
+    private static func isDirectMediaURL(_ value: String) -> Bool {
+        guard let url = URL(string: value), canRead(url) else { return false }
+        return ["m3u8", "mp4", "m4v", "mov", "mkv", "webm", "flv", "ts"].contains(url.pathExtension.lowercased())
+    }
+
+    private static func headers(_ request: URLRequest, scopedTo url: URL) -> [String: String] {
+        guard let original = request.url, SourceSubtitleParser.sameOrigin(original, url) else { return [:] }
+        return SourceSubtitleParser.safeHeaders(request.allHTTPHeaderFields)
+    }
+
+    static func redirectRequest(_ request: URLRequest, from previousURL: URL?, headers: [String: String]? = nil) -> URLRequest? {
+        guard let target = request.url, let previousURL, canRead(target),
+              !(previousURL.scheme?.lowercased() == "https" && target.scheme?.lowercased() == "http") else { return nil }
+        // Foundation may merge an empty header dictionary into an existing
+        // request. Build a clean GET request so removed credentials stay removed.
+        var result = URLRequest(url: target, cachePolicy: request.cachePolicy, timeoutInterval: request.timeoutInterval)
+        result.allHTTPHeaderFields = SourceSubtitleParser.sameOrigin(previousURL, target)
+            ? SourceSubtitleParser.safeHeaders(headers ?? request.allHTTPHeaderFields ?? [:]) : [:]
+        result.setValue("bytes=0-\(maximumSampleBytes - 1)", forHTTPHeaderField: "Range")
+        return result
     }
 
     static func readSample(_ url: URL) async throws -> (Data, HTTPURLResponse) {
@@ -104,6 +171,10 @@ struct MediaAvailabilityService {
     }
 
     static func readSample(_ url: URL, configuration: URLSessionConfiguration) async throws -> (Data, HTTPURLResponse) {
+        try await readSample(URLRequest(url: url), configuration: configuration)
+    }
+
+    static func readSample(_ originalRequest: URLRequest, configuration: URLSessionConfiguration) async throws -> (Data, HTTPURLResponse) {
         let configuration = configuration.copy() as! URLSessionConfiguration
         configuration.timeoutIntervalForRequest = 6
         configuration.timeoutIntervalForResource = 8
@@ -114,7 +185,7 @@ struct MediaAvailabilityService {
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
         return try await withTaskCancellationHandler {
-            var request = URLRequest(url: url)
+            var request = originalRequest
             request.setValue("bytes=0-\(maximumSampleBytes - 1)", forHTTPHeaderField: "Range")
             let (bytes, response) = try await session.bytes(for: request, delegate: MediaProbeRedirectDelegate())
             guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
@@ -139,11 +210,10 @@ private final class MediaProbeRedirectDelegate: NSObject, URLSessionTaskDelegate
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         count += 1
-        guard count <= 4, let url = request.url, MediaAvailabilityService.canRead(url),
-              !(response.url?.scheme == "https" && url.scheme == "http") else {
+        guard count <= 4 else {
             completionHandler(nil)
             return
         }
-        completionHandler(request)
+        completionHandler(MediaAvailabilityService.redirectRequest(request, from: response.url))
     }
 }

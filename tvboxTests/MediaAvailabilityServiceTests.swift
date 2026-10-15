@@ -2,6 +2,72 @@ import XCTest
 @testable import TVBox
 
 final class MediaAvailabilityServiceTests: XCTestCase {
+    func testCatVodResolvedHeadersReachManifestAndSameOriginSegmentOnly() async throws {
+        let source = SourceBean(api: "/spider/fixture/3", type: 3)
+        var requests = [URLRequest]()
+        let service = MediaAvailabilityService(sampleRequest: { request in
+            requests.append(request)
+            let url = request.url!
+            switch url.path {
+            case "/master.m3u8":
+                return (Data("#EXTM3U\nvariant.m3u8\n".utf8), self.response(url))
+            case "/variant.m3u8":
+                return (Data("#EXTM3U\nhttps://cdn.example.com/clip.m4s\n".utf8), self.response(url))
+            default: return (self.media, self.response(url))
+            }
+        })
+        let result = try await service.verify(info: info(["opaque"]), source: source) { _, _ in
+            SpiderPlaybackResult(url: "https://example.com/master.m3u8",
+                                 headers: ["Cookie": "fixture-only", "Referer": "https://example.com/", "X-Token": "fixture-token"], qualityOptions: [])
+        }
+        XCTAssertTrue(result.isVerified)
+        XCTAssertEqual(requests.count, 3)
+        XCTAssertEqual(requests[0].value(forHTTPHeaderField: "Cookie"), "fixture-only")
+        XCTAssertEqual(requests[1].value(forHTTPHeaderField: "Cookie"), "fixture-only")
+        XCTAssertNil(requests[2].value(forHTTPHeaderField: "Cookie"))
+        XCTAssertNil(requests[2].value(forHTTPHeaderField: "X-Token"))
+    }
+
+    func testCatVodRetriesAnotherResolvedRouteAndDoesNotTreatPlayerURLAsMediaProof() async throws {
+        let source = SourceBean(api: "/spider/fixture/3", type: 3)
+        var resolutions = [String]()
+        let service = MediaAvailabilityService { url in
+            url.path == "/bad.mp4" ? (Data(), self.response(url, status: 404)) : (self.media, self.response(url))
+        }
+        let result = try await service.verify(info: info(["bad-id", "good-id"]), source: source) { _, id in
+            resolutions.append(id)
+            return SpiderPlaybackResult(url: "https://example.com/\(id == "bad-id" ? "bad" : "good").mp4", headers: [:], qualityOptions: [])
+        }
+        XCTAssertEqual(result, .verified(flag: "线路1", episode: "第1集"))
+        XCTAssertEqual(resolutions, ["bad-id", "good-id"])
+    }
+
+    func testCloudCatalogAndLegacyOpaqueSpiderDoNotResolveOrTransferFiles() async throws {
+        for source in [SourceBean(api: "/spider/wogg/3", type: 3), .cloudPan, SourceBean(api: "csp_Fixture", type: 3)] {
+            let service = MediaAvailabilityService(sample: { _ in
+                XCTFail("Cloud and legacy opaque routes cannot be blindly sampled")
+                throw URLError(.cancelled)
+            })
+            let result = try await service.verify(info: info(["opaque"]), source: source) { _, _ in
+                XCTFail("Availability must not transfer cloud files")
+                throw URLError(.cancelled)
+            }
+            if case .needsPlayback = result {} else { XCTFail("Needs playback confirmation") }
+        }
+    }
+
+    func testProbeRedirectDropsAllSourceCredentialsCrossOriginAndBlocksDowngrade() throws {
+        var request = URLRequest(url: URL(string: "https://cdn.example.com/clip")!)
+        request.allHTTPHeaderFields = ["Cookie": "fixture-only", "Authorization": "fixture-token", "X-Token": "fixture"]
+        let redirected = try XCTUnwrap(MediaAvailabilityService.redirectRequest(request, from: URL(string: "https://example.com/list")!))
+        XCTAssertNil(redirected.value(forHTTPHeaderField: "Cookie"))
+        XCTAssertNil(redirected.value(forHTTPHeaderField: "Authorization"))
+        XCTAssertNil(redirected.value(forHTTPHeaderField: "X-Token"))
+        XCTAssertEqual(redirected.value(forHTTPHeaderField: "Range"), "bytes=0-8191")
+        request.url = URL(string: "http://example.com/clip")!
+        XCTAssertNil(MediaAvailabilityService.redirectRequest(request, from: URL(string: "https://example.com/list")!))
+    }
+
     func testDirectSpiderMediaCanBeInspectedWithoutCallingPlayer() {
         XCTAssertTrue(MediaAvailabilityService.hasDirectMediaRoute(info(["https://example.com/video.mp4?token=test"])))
         XCTAssertFalse(MediaAvailabilityService.hasDirectMediaRoute(info(["opaque-player-id"])))
@@ -79,10 +145,10 @@ final class MediaAvailabilityServiceTests: XCTestCase {
     }
 
     func testCloudVerificationDoesNotResolveOrTransferFiles() async throws {
-        let service = MediaAvailabilityService { _ in
+        let service = MediaAvailabilityService(sample: { _ in
             XCTFail("Cloud resources must remain read-only without player calls")
             throw URLError(.cancelled)
-        }
+        })
         let result = try await service.verify(info: info(["https://example.com/share"]), requiresPlayerResolution: true)
         if case .needsPlayback = result {} else { XCTFail("Cloud playback is not proven by its directory") }
     }

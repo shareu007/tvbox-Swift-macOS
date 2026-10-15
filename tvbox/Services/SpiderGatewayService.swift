@@ -220,12 +220,16 @@ final class SpiderGatewayService {
         return parseVideos(object, sourceKey: source.key)
     }
 
-    func player(source: SourceBean, flag: String, id: String) async throws -> SpiderPlaybackResult {
+    func player(source: SourceBean, flag: String, id: String, verifyResource: Bool = false) async throws -> SpiderPlaybackResult {
         let object = try await invoke(source: source, action: "player", arguments: [
             "flag": .string(flag),
             "id": .string(id),
-            "vipFlags": .array([])
+            "vipFlags": .array([]),
+            "verifyResource": .bool(verifyResource)
         ])
+        if object["verification"] as? String == "needs-playback" {
+            throw SpiderGatewayError.playbackVerificationRequired
+        }
         let parse = flexibleInt(object["parse"])
         let jx = flexibleInt(object["jx"])
         guard parse != 1, jx != 1 else { throw SpiderGatewayError.parseNotSupported }
@@ -404,6 +408,7 @@ enum SpiderGatewayError: LocalizedError {
     case invalidResponse
     case emptyPlayerURL
     case parseNotSupported
+    case playbackVerificationRequired
     case remote(String)
 
     var errorDescription: String? {
@@ -416,6 +421,7 @@ enum SpiderGatewayError: LocalizedError {
         case .invalidResponse: return "Spider Gateway 返回了无效响应"
         case .emptyPlayerURL: return "Spider 没有返回可播放地址"
         case .parseNotSupported: return "该播放地址需要网页解析，当前版本暂不支持"
+        case .playbackVerificationRequired: return "网盘资源需要登录后播放确认"
         case .remote(let message): return "Spider 执行失败：\(message)"
         }
     }

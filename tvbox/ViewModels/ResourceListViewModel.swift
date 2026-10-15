@@ -16,7 +16,7 @@ enum ResourceStatusFilter: String, CaseIterable, Identifiable {
         case .playable: return state?.isPlayable(at: date) == true
         case .pending:
             switch state {
-            case nil, .checking: return true
+            case nil, .checking, .checkingMedia: return true
             case .ready:
                 if case .needsPlayback = state?.playback { return true }
                 return state?.playback == .notChecked || (state?.playback.isVerified == true && state?.isPlayable(at: date) != true)
@@ -33,16 +33,19 @@ enum ResourceStatusFilter: String, CaseIterable, Identifiable {
 
 enum ResourceCheckState {
     case checking
+    case checkingMedia(VodInfo, checkedAt: Date)
     case ready(VodInfo, checkedAt: Date, playback: ResourcePlaybackVerification = .notChecked)
     case empty
     case failed(String)
 
     var detail: VodInfo? {
+        if case .checkingMedia(let info, _) = self { return info }
         if case .ready(let info, _, _) = self { return info }
         return nil
     }
 
     var checkedAt: Date? {
+        if case .checkingMedia(_, let date) = self { return date }
         if case .ready(_, let date, _) = self { return date }
         return nil
     }
@@ -70,6 +73,7 @@ enum ResourceCheckState {
 
     var isComplete: Bool {
         if case .checking = self { return false }
+        if case .checkingMedia = self { return false }
         return true
     }
 
@@ -78,6 +82,7 @@ enum ResourceCheckState {
     func label(at date: Date) -> String {
         switch self {
         case .checking: return "正在检查剧集…"
+        case .checkingMedia: return "已找到剧集 · 正在抽检媒体…"
         case .ready(let info, _, let verification):
             switch verification {
             case .notChecked: return "已找到剧集 · \(info.currentEpisodes.count) 集 · 尚未抽检播放"
@@ -104,24 +109,31 @@ final class ResourceListViewModel: ObservableObject {
     private let loadDetail: DetailLoader
     private let verify: PlaybackVerifier
     private let now: @MainActor () -> Date
+    private let resourceTimeout: Double
     private var generation = UUID()
     private var ownedTask: Task<Void, Never>?
 
-    init(now: @escaping @MainActor () -> Date = Date.init,
+    init(now: @escaping @MainActor () -> Date = Date.init, resourceTimeout: Double = 12,
          verifyPlayback: @escaping PlaybackVerifier = ResourceListViewModel.verifyMedia,
          loadDetail: @escaping DetailLoader = ResourceListViewModel.fetchDetail) {
         self.loadDetail = loadDetail
         self.now = now
         self.verify = verifyPlayback
+        self.resourceTimeout = resourceTimeout
     }
 
     static func verifyMedia(_ info: VodInfo) async throws -> ResourcePlaybackVerification {
         guard let source = ApiConfig.shared.getSource(key: info.sourceKey) else {
             return .needsPlayback("来源配置已变化，请重新搜索")
         }
-        return try await MediaAvailabilityService().verify(
-            info: info, requiresPlayerResolution: source.isSearchOnly || (source.type == 3 && !MediaAvailabilityService.hasDirectMediaRoute(info))
-        )
+        return try await verifyMedia(info, source: source, media: MediaAvailabilityService()) { flag, id in
+            try await SpiderGatewayService.shared.player(source: source, flag: flag, id: id, verifyResource: true)
+        }
+    }
+
+    static func verifyMedia(_ info: VodInfo, source: SourceBean, media: MediaAvailabilityService,
+                            resolvePlayer: MediaAvailabilityService.PlayerResolver) async throws -> ResourcePlaybackVerification {
+        try await media.verify(info: info, source: source, resolvePlayer: resolvePlayer)
     }
 
     func playableCount(in resources: [Movie.Video], kind: ResourceKindFilter, cloudSourceKeys: Set<String>, at date: Date? = nil) -> Int {
@@ -178,6 +190,11 @@ final class ResourceListViewModel: ObservableObject {
         return try await SourceService.shared.getDetail(sourceBean: source, vodId: video.id, verifyResource: true)
     }
 
+    private func publishDetail(_ info: VodInfo, id: String, token: UUID) {
+        guard generation == token else { return }
+        states[id] = .checkingMedia(info, checkedAt: now())
+    }
+
     func check(_ resources: [Movie.Video], refresh: Bool = false, verifyPlayback: Bool = false) async {
         guard !Task.isCancelled else { return }
         let token = UUID()
@@ -196,20 +213,29 @@ final class ResourceListViewModel: ObservableObject {
         let loader = loadDetail
         let now = now
         let verifier = verify
+        let timeout = resourceTimeout
         await withTaskGroup(of: (String, ResourceCheckState).self) { group in
             var iterator = pending.makeIterator()
             func enqueue(_ video: Movie.Video) {
                 group.addTask {
+                    let budget = await HomeLoadBudget(seconds: timeout, requestSeconds: timeout)
+                    var loadedInfo: VodInfo?
+                    let state: ResourceCheckState
                     do {
                         try Task.checkCancellation()
                         let cached = previous[video.resourceID]
                         let timestamp = await now()
                         let canReuse = !refresh && cached?.checkedAt.map { timestamp.timeIntervalSince($0) < 60 } == true
                         let info: VodInfo?
-                        if canReuse { info = cached?.detail } else { info = try await loader(video) }
-                        let state: ResourceCheckState
+                        if canReuse { info = cached?.detail }
+                        else { info = try await budget.run { try await loader(video) } }
                         if var info, info.playFlags.contains(where: { !(info.playUrlMap[$0] ?? []).isEmpty }) {
-                            let playback = verifyPlayback ? try await verifier(info) : (canReuse ? (cached?.playback ?? .notChecked) : .notChecked)
+                            loadedInfo = info
+                            if verifyPlayback { await self.publishDetail(info, id: video.resourceID, token: token) }
+                            let probeInfo = info
+                            let playback = verifyPlayback
+                                ? try await budget.run { try await verifier(probeInfo) }
+                                : (canReuse ? (cached?.playback ?? .notChecked) : .notChecked)
                             // 抽检备用线路成功时，详情页也应默认选择这条线路。
                             if case .verified(let flag, _) = playback, info.playFlags.contains(flag) {
                                 info.playFlag = flag
@@ -219,11 +245,17 @@ final class ResourceListViewModel: ObservableObject {
                         } else {
                             state = .empty
                         }
-                        return (video.resourceID, state)
                     } catch {
                         // 超时、登录失效、提取码错误均不等同于分享过期。
-                        return (video.resourceID, .failed(error.localizedDescription))
+                        if let info = loadedInfo {
+                            state = .ready(info, checkedAt: await now(), playback: .needsPlayback(
+                                error is HomeLoadBudget.Failure ? "抽检超时，可播放确认或重新检查" : "暂时无法完成抽检，可播放确认或重试"))
+                        } else {
+                            state = .failed(error is HomeLoadBudget.Failure ? "读取剧集超时，可重新检查" : error.localizedDescription)
+                        }
                     }
+                    await budget.cancel()
+                    return (video.resourceID, state)
                 }
             }
             for _ in 0..<3 {
@@ -242,7 +274,7 @@ final class ResourceListViewModel: ObservableObject {
         guard generation == token else { return }
         if Task.isCancelled {
             for video in pending {
-                if case .checking = states[video.resourceID] { states[video.resourceID] = nil }
+                if states[video.resourceID]?.isComplete == false { states[video.resourceID] = nil }
             }
         }
         isChecking = false

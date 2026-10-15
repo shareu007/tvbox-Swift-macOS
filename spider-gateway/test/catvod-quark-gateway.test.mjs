@@ -56,12 +56,12 @@ async function setup(t, options = {}) {
   });
   await new Promise(resolve => gateway.server.listen(0, "127.0.0.1", resolve));
   t.after(() => gateway.close());
-  return { observed, play: async (mode = "original") => {
+  return { observed, play: async (mode = "original", verifyResource = false) => {
     const response = await fetch(`http://127.0.0.1:${gateway.server.address().port}/v1/spider/invoke`, {
       method: "POST", headers: { "content-type": "application/json", authorization: "Bearer fixture-gateway" },
       body: JSON.stringify({ version: 1, action: "player", site: {
         key: "fixture", api: "/spider/wogg/3", jar: "https://example.test/index.js.md5", ext: ""
-      }, arguments: { flag: "fixture", id: episode(mode), vipFlags: [] } })
+      }, arguments: { flag: "fixture", id: episode(mode), vipFlags: [], verifyResource } })
     });
     return { status: response.status, body: await response.json() };
   } };
@@ -75,6 +75,16 @@ test("CatVod Quark playback uses saved credentials in the parent instead of the 
   assert.equal(result.body.header.cookie, "fixture-cookie");
   assert.equal(observed.sourceCalls, 0);
   assert.equal(observed.saves, 1);
+});
+
+test("availability checks do not transfer cloud files or send account credentials", async t => {
+  const { play, observed } = await setup(t);
+  const result = await play("original", true);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.verification, "needs-playback");
+  assert.equal(observed.sourceCalls, 0);
+  assert.equal(observed.saves, 0);
+  assert.deepEqual(observed.requests, []);
 });
 
 test("CatVod speed mode uses transcode quality options without leaking Cookie to another media host", async t => {

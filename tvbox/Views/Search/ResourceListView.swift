@@ -96,7 +96,7 @@ struct ResourceListView: View {
             ProgressView(value: Double(checkedCount), total: Double(max(1, group.resources.count)))
                 .tint(.orange)
                 .accessibilityLabel("资源检查进度")
-            Text("每个在线资源最多抽检三条线路的首集，不保证整部剧均可播放。网盘及需解析的来源保留目录，待播放器确认。")
+            Text("每个在线资源最多抽检三条线路的首集，支持 Spider 地址解析。网盘及网页解析来源仍需播放确认。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

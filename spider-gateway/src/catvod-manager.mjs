@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { attachBoundedLineReader } from "./bounded-lines.mjs";
 import { GatewayError } from "./errors.mjs";
+import { CatVodResponseCache, responseCacheKey } from "./catvod-response-cache.mjs";
 
 const runnerPath = fileURLToPath(new URL("./catvod-runner.mjs", import.meta.url));
 
@@ -145,6 +146,8 @@ export class CatVodManager {
     this.creating = new Map();
     this.startingSessions = new Set();
     this.closed = false;
+    this.responseCaches = new WeakMap();
+    this.responseCacheOptions = options.responseCacheOptions;
     this.sweeper = setInterval(() => this.sweep(), Math.min(this.idleMs, 5_000));
     this.sweeper.unref();
   }
@@ -157,13 +160,20 @@ export class CatVodManager {
     // The parent resolves site.jar; it may contain private bundle credentials.
     // Remote code needs only the provider route and its initialization value.
     const runnerSite = { key: site.key, api: site.api, ext: site.ext || "" };
-    const result = await (await this.#session(artifact)).request({
-      type: "invoke", site: runnerSite, action, arguments: argumentsValue
-    });
-    if (!result || typeof result !== "object" || Array.isArray(result)) {
-      throw new GatewayError("INVALID_CATVOD_RESPONSE", "CatVod result must be a JSON object", 502);
+    const session = await this.#session(artifact);
+    let cache = this.responseCaches.get(session);
+    if (!cache) {
+      cache = new CatVodResponseCache(this.responseCacheOptions);
+      this.responseCaches.set(session, cache);
     }
-    return result;
+    session.lastUsedAt = Date.now();
+    return cache.load(responseCacheKey(runnerSite, action, argumentsValue), action, async () => {
+      const result = await session.request({ type: "invoke", site: runnerSite, action, arguments: argumentsValue });
+      if (!result || typeof result !== "object" || Array.isArray(result)) {
+        throw new GatewayError("INVALID_CATVOD_RESPONSE", "CatVod result must be a JSON object", 502);
+      }
+      return result;
+    }, argumentsValue.verifyResource === true);
   }
 
   async #session(artifact) {

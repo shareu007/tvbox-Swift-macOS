@@ -3,6 +3,59 @@ import XCTest
 
 @MainActor
 final class ResourceListViewModelTests: XCTestCase {
+    func testSlowProbePublishesEpisodesImmediatelyAndDoesNotBlockOtherResources() async {
+        let probeStarted = expectation(description: "Slow probe started")
+        let finished = expectation(description: "Checks finished within their budget")
+        var continuation: CheckedContinuation<Void, Never>?
+        let slow = Movie.Video(id: "slow")
+        let fast = Movie.Video(id: "fast")
+        let model = ResourceListViewModel(resourceTimeout: 0.03, verifyPlayback: { info in
+            if info.id == slow.id {
+                await withCheckedContinuation {
+                    continuation = $0
+                    probeStarted.fulfill()
+                }
+            }
+            return .verified(flag: "直连", episode: "第1集")
+        }, loadDetail: { self.info(for: $0) })
+        let task = Task {
+            await model.check([slow, fast], verifyPlayback: true)
+            finished.fulfill()
+        }
+        await fulfillment(of: [probeStarted], timeout: 1)
+        XCTAssertNotNil(model.states[slow.resourceID]?.detail, "Media probing must not delay opening episodes")
+        await fulfillment(of: [finished], timeout: 0.5)
+        continuation?.resume()
+        await task.value
+        XCTAssertNotNil(model.states[slow.resourceID]?.detail)
+        if case .needsPlayback = model.states[slow.resourceID]?.playback {} else { XCTFail("Timeout is inconclusive, not a playable or expired resource") }
+        XCTAssertTrue(model.states[fast.resourceID]?.isPlayable == true)
+        XCTAssertFalse(model.isChecking)
+    }
+
+    func testCatVodResourceCheckResolvesOpaqueEpisodeAndSamplesMedia() async throws {
+        let source = SourceBean(key: "fixture", api: "/spider/fixture/3", type: 3, jar: "https://example.com/index.js.md5")
+        let video = Movie.Video(id: "film", sourceKey: source.key)
+        let info = VodInfo.from(video: video, playFrom: "在线", playUrl: "第1集$opaque-episode-id")
+        var resolutions = 0
+        var samples = 0
+        let media = MediaAvailabilityService { url in
+            samples += 1
+            XCTAssertEqual(url.absoluteString, "https://example.com/video.mp4")
+            let bytes = Data([0, 0, 0, 32] + Array("ftypisom".utf8) + Array(repeating: 0, count: 32))
+            return (bytes, HTTPURLResponse(url: url, statusCode: 206, httpVersion: nil, headerFields: nil)!)
+        }
+        let result = try await ResourceListViewModel.verifyMedia(info, source: source, media: media) { flag, id in
+            resolutions += 1
+            XCTAssertEqual(flag, "在线")
+            XCTAssertEqual(id, "opaque-episode-id")
+            return SpiderPlaybackResult(url: "https://example.com/video.mp4", headers: [:], qualityOptions: [])
+        }
+        XCTAssertEqual(resolutions, 1, "CatVod episode IDs must be resolved before checking media")
+        XCTAssertEqual(samples, 1, "A directory alone must not count as a playable resource")
+        XCTAssertEqual(result, .verified(flag: "在线", episode: "第1集"))
+    }
+
     func testExpiredVerificationLabelAgreesWithAvailableCount() async throws {
         var date = Date()
         let video = Movie.Video(id: "clock-regression")

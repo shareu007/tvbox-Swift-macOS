@@ -9,6 +9,7 @@ import { WorkerManager } from "./worker-manager.mjs";
 import { cloudPanSite, handleCloudPanAction, isCloudPanSite } from "./cloud-pan.mjs";
 import { handlePanSearchAction, isPanSearchSite } from "./pan-search.mjs";
 import { resolveCatVodCloudPlayer } from "./catvod-cloud-player.mjs";
+import { requiresPlaybackConfirmation } from "./readonly-player.mjs";
 
 function sendJSON(response, status, value) {
   const body = JSON.stringify(value);
@@ -98,6 +99,11 @@ export function createGateway(config, dependencies = {}) {
       }
 
       const invoke = validateInvokeRequest(body);
+      if (invoke.action === "player" && invoke.arguments.verifyResource === true
+        && requiresPlaybackConfirmation(invoke.site, invoke.arguments)) {
+        sendJSON(response, 200, { verification: "needs-playback", parse: 1, url: "" });
+        return;
+      }
       if (invoke.site.api.startsWith("/spider/")) {
         if (isCloudPanSite(invoke.site) || isPanSearchSite(invoke.site)) {
           const options = {

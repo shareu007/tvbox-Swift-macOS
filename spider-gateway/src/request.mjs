@@ -81,6 +81,7 @@ function validateArguments(action, args) {
       if (typeof args.flag !== "string") invalid("arguments.flag must be a string");
       requiredString(args.id, "arguments.id");
       if (!Array.isArray(args.vipFlags) || args.vipFlags.some((flag) => typeof flag !== "string")) invalid("arguments.vipFlags must be a string array");
+      if (args.verifyResource !== undefined && typeof args.verifyResource !== "boolean") invalid("arguments.verifyResource must be a boolean");
       break;
   }
 }
