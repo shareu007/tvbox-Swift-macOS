@@ -101,7 +101,7 @@ struct ResourceListView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(16)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
     }
 
     private func filters(at date: Date) -> some View {
@@ -181,8 +181,8 @@ struct ResourceRowView: View {
                 .frame(width: 32, height: 32)
                 .background(statusColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 7) {
-                Text(sourceName).font(.headline).foregroundStyle(.white)
-                Text(video.name).font(.subheadline).foregroundStyle(.white.opacity(0.8)).lineLimit(2)
+                Text(sourceName).font(.headline).foregroundStyle(.primary)
+                Text(video.name).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 if ["夸克网盘", "阿里云盘", "123网盘"].contains(video.note) {
                     Text(video.note).font(.caption).foregroundStyle(.orange)
                 }
@@ -202,7 +202,7 @@ struct ResourceRowView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(statusColor.opacity(0.15), lineWidth: 1))
     }
 }

@@ -62,7 +62,7 @@ struct SettingsView: View {
                         ) {
                             beginEditingApi(.vod)
                         }
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         NavigationLink {
                             configPresetPickerView
                         } label: {
@@ -75,7 +75,7 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         SettingsRow(
                             icon: "tv",
                             title: "直播接口地址",
@@ -86,7 +86,7 @@ struct SettingsView: View {
                             beginEditingApi(.live)
                         }
 #if !os(macOS)
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         SettingsRow(
                             icon: "shippingbox",
                             title: "Spider Gateway",
@@ -97,11 +97,11 @@ struct SettingsView: View {
                             beginEditingApi(.spiderGateway)
                         }
 #endif
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         SettingsHelpRow(
                             text: "添加接口后会自动识别配置协议、站点协议和适配情况；加载成功的接口会保存到“我的点播配置”，以后可以直接切换或删除。"
                         )
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         if !apiConfig.sourceBeanList.isEmpty {
                             NavigationLink {
                                 sourcePickerView
@@ -112,7 +112,7 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
 #if os(macOS)
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         NavigationLink {
                             CloudDriveSettingsView()
                         } label: {
@@ -130,6 +130,10 @@ struct SettingsView: View {
 #endif
                     }
                     
+                    SectionCard(title: "外观") {
+                        AppearanceSettingsView()
+                    }
+
                     // 播放设置
                     SectionCard(title: "播放设置") {
                         SettingsRow(icon: "play.rectangle", title: "点播播放器", value: viewModel.vodPlayerEngine.title) {
@@ -137,23 +141,23 @@ struct SettingsView: View {
                                 showingPicker = .vodPlayer
                             }
                         }
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         SettingsRow(icon: "dot.radiowaves.left.and.right", title: "直播播放器", value: viewModel.livePlayerEngine.title) {
                             if viewModel.playerEngineOptions.count > 1 {
                                 showingPicker = .livePlayer
                             }
                         }
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         SettingsRow(icon: "cpu", title: "视频解码", value: viewModel.decodeMode.title) {
                             showingPicker = .decode
                         }
                         if PlayerEngine.isVLCAvailable {
-                            Divider().background(Color.white.opacity(0.1))
+                            Divider().background(Color.primary.opacity(0.1))
                             SettingsRow(icon: "externaldrive.badge.wifi", title: "VLC缓冲", value: viewModel.vlcBufferMode.title) {
                                 showingPicker = .vlcBuffer
                             }
                         }
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         SettingsRow(icon: "forward", title: "快进步长", value: "\(viewModel.playTimeStep)秒") {
                             showingPicker = .playTimeStep
                         }
@@ -168,7 +172,7 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         NavigationLink {
                             FavoritesView()
                         } label: {
@@ -188,11 +192,11 @@ struct SettingsView: View {
                     // 关于
                     SectionCard(title: "关于") {
                         SettingsRow(icon: "info.circle", title: "版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—", action: nil)
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         SettingsRow(icon: "globe", title: "站点数量", value: "\(apiConfig.sourceBeanList.count)", action: nil)
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         SettingsRow(icon: "wand.and.stars", title: "解析数量", value: "\(apiConfig.parseBeanList.count)", action: nil)
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(Color.primary.opacity(0.1))
                         SettingsRow(icon: "tv", title: "直播分组", value: "\(apiConfig.liveChannelGroupList.count)", action: nil)
                     }
                 }
@@ -203,7 +207,6 @@ struct SettingsView: View {
             .navigationTitle("设置")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)
             #endif
             .task {
@@ -540,14 +543,14 @@ struct SettingsView: View {
                     Text("协议支持、首页实测和播放实测分别记录。首页检测仅抽查部分分类；播放成功样本不代表全部影片可播放，记录仅反映当时结果。点击配置可切换。")
                 }
                 .font(.caption)
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
                 .glassCard(cornerRadius: 16)
 
                 Text("我的配置")
                     .font(.subheadline.bold())
-                    .foregroundColor(.white.opacity(0.65))
+                    .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if viewModel.isLoadingConfig {
@@ -581,10 +584,10 @@ struct SettingsView: View {
                             .foregroundColor(.orange.opacity(0.8))
                         Text("还没有保存的点播配置")
                             .font(.headline)
-                            .foregroundColor(.white.opacity(0.85))
+                            .foregroundColor(.primary)
                         Text("点击右上角“添加”输入接口地址。")
                             .font(.caption)
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(.secondary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 32)
@@ -613,22 +616,22 @@ struct SettingsView: View {
                                         HStack(spacing: 8) {
                                             Text(config.name)
                                                 .font(.system(size: 16, weight: .semibold))
-                                                .foregroundColor(.white)
+                                                .foregroundColor(.primary)
                                             Group {
                                                 Text(compatibilityLabel(for: config))
                                                     .font(.system(size: 10, weight: .bold))
                                                     .foregroundColor(config.compatibility == .compatible ? .green : .orange)
                                                     .padding(.horizontal, 6)
                                                     .padding(.vertical, 3)
-                                                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                                                    .background(Capsule().fill(Color.primary.opacity(0.08)))
                                             }
                                         }
                                         Text(config.configurationProtocol + protocolSuffix(for: config.sourceProtocols))
                                             .font(.system(size: 12))
-                                            .foregroundColor(.white.opacity(0.55))
+                                            .foregroundColor(.secondary)
                                         Text(SensitiveURLRedactor.redact(config.url))
                                             .font(.system(size: 11))
-                                            .foregroundColor(.white.opacity(0.35))
+                                            .foregroundColor(.secondary)
                                             .lineLimit(1)
                                     }
 
@@ -657,7 +660,7 @@ struct SettingsView: View {
                                 viewModel.removeSavedVodConfig(config)
                             } label: {
                                 Image(systemName: "trash")
-                                    .foregroundColor(.white.opacity(0.45))
+                                    .foregroundColor(.secondary)
                                     .padding(8)
                             }
                             .buttonStyle(.plain)
@@ -676,7 +679,7 @@ struct SettingsView: View {
                 if !unusedPresets.isEmpty {
                     Text("可添加配置")
                         .font(.subheadline.bold())
-                        .foregroundColor(.white.opacity(0.65))
+                        .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 8)
 
@@ -696,13 +699,13 @@ struct SettingsView: View {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text(preset.name)
                                         .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(.primary)
                                     Text("\(SettingsViewModel.inferredConfigurationProtocol(for: preset.url)) · \(preset.compatibility.rawValue)")
                                         .font(.caption)
-                                        .foregroundColor(.white.opacity(0.5))
+                                        .foregroundColor(.secondary)
                                     Text(SensitiveURLRedactor.redact(preset.url))
                                         .font(.system(size: 11))
-                                        .foregroundColor(.white.opacity(0.35))
+                                        .foregroundColor(.secondary)
                                         .lineLimit(1)
                                 }
                                 Spacer()
@@ -856,7 +859,7 @@ struct SettingsView: View {
                                     HStack(spacing: 8) {
                                         Text(source.name)
                                             .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(source.isSupportedInSwift ? .white : .white.opacity(0.5))
+                                            .foregroundColor(source.isSupportedInSwift ? .primary : .secondary)
                                         
                                         // 类型标签
                                         Text(source.typeDescription)
@@ -882,7 +885,7 @@ struct SettingsView: View {
                                     
                                     Text(source.api)
                                         .font(.system(size: 12))
-                                        .foregroundColor(.white.opacity(0.5))
+                                        .foregroundColor(.secondary)
                                         .lineLimit(1)
                                 }
                                 
@@ -901,7 +904,7 @@ struct SettingsView: View {
                                             .foregroundColor(.orange)
                                     } else {
                                         Circle()
-                                            .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                                            .strokeBorder(Color.primary.opacity(0.2), lineWidth: 1)
                                             .frame(width: 20, height: 20)
                                     }
                                 }
@@ -952,7 +955,7 @@ struct SectionCard<Content: View>: View {
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.bold)
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.secondary)
                 .padding(.leading, 8)
             
             VStack(alignment: .leading, spacing: 0) {
@@ -992,18 +995,18 @@ struct SettingsRow: View {
             
             Text(title)
                 .font(.body)
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(.primary)
             
             Spacer()
             
             Text(value)
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(.secondary)
                 .lineLimit(1)
             
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(.secondary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -1024,7 +1027,7 @@ struct SettingsHelpRow: View {
 
             Text(text)
                 .font(.caption)
-                .foregroundColor(.white.opacity(0.55))
+                .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

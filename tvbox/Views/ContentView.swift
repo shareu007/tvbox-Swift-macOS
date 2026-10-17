@@ -33,7 +33,6 @@ struct ContentView: View {
         .overlay(alignment: .top) {
             networkStatusBanner
         }
-        .preferredColorScheme(.dark)
         .task {
             await appState.restoreSavedConfigurationIfNeeded()
         }
@@ -217,12 +216,12 @@ struct ContentView: View {
                         VStack(spacing: 8) {
                             Text("TVBox")
                                 .font(.system(size: 48, weight: .heavy, design: .rounded))
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                                 .tracking(2)
                             
                             Text("极致视听 · 简洁至上")
                                 .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(.secondary)
                                 .tracking(4)
                         }
                     }
@@ -233,7 +232,7 @@ struct ContentView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("接口配置")
                                 .font(.headline)
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
                                 .padding(.leading, 4)
                             
                             HStack {
@@ -241,7 +240,7 @@ struct ContentView: View {
                                     .foregroundColor(.orange)
                                 TextField("请输入点播接口地址 (URL)", text: $settingsVM.vodApiUrl)
                                     .textFieldStyle(.plain)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
                                     .onTapGesture {
                                         setupInputTarget = .vod
                                     }
@@ -268,7 +267,7 @@ struct ContentView: View {
                                     .foregroundColor(.orange)
                                 TextField("请输入直播接口地址 (URL，可留空跟随点播)", text: $settingsVM.liveApiUrl)
                                     .textFieldStyle(.plain)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
                                     .onTapGesture {
                                         setupInputTarget = .live
                                     }
@@ -328,7 +327,7 @@ struct ContentView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("最近使用")
                                     .font(.caption)
-                                    .foregroundColor(.white.opacity(0.5))
+                                    .foregroundColor(.secondary)
                                     .padding(.horizontal, 4)
                                 
                                 ForEach(settingsVM.apiHistory.prefix(3), id: \.self) { url in
@@ -352,7 +351,7 @@ struct ContentView: View {
                                         }
                                         .padding(.vertical, 10)
                                         .padding(.horizontal, 16)
-                                        .foregroundColor(.white.opacity(0.7))
+                                        .foregroundColor(.secondary)
                                         .glassCard(cornerRadius: 10)
                                     }
                                     .buttonStyle(.plain)

@@ -89,7 +89,7 @@ struct SearchView: View {
                 Spacer()
             }
         }
-        .background(Color(red: 0.08, green: 0.08, blue: 0.1))
+        .background(AppTheme.background)
         .navigationTitle("搜索")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -104,12 +104,12 @@ struct SearchView: View {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.secondary)
 
                 TextField("搜索影片...", text: $viewModel.keyword)
                     .textFieldStyle(.plain)
                     .font(.system(size: 16))
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                     .submitLabel(.search)
                     .onSubmit {
                         viewModel.submitSearch()
@@ -125,14 +125,14 @@ struct SearchView: View {
                         }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color.white.opacity(0.05))
+            .background(Color.primary.opacity(0.05))
             .cornerRadius(16)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
@@ -189,7 +189,7 @@ struct SearchView: View {
                     }
                     Text("\(groups.count) 部影视 · \(groups.reduce(0) { $0 + $1.resources.count }) 个资源")
                         .font(.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                     Text("同一剧目的来源已汇总，抽检可用优先，检查未通过的排在最后。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -288,7 +288,7 @@ struct SearchView: View {
                 HStack {
                     Text("搜索历史")
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                     Spacer()
                     Button {
                         viewModel.clearHistory()
@@ -312,10 +312,10 @@ struct SearchView: View {
                         } label: {
                             Text(keyword)
                                 .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(.secondary)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 7)
-                                .background(Color.white.opacity(0.1))
+                                .background(Color.primary.opacity(0.1))
                                 .cornerRadius(16)
                         }
                         .buttonStyle(.plain)

@@ -18,7 +18,7 @@ struct CloudDriveSettingsView: View {
                         text: $quarkCookie,
                         provider: .quark
                     )
-                    Divider().background(Color.white.opacity(0.1))
+                    Divider().background(Color.primary.opacity(0.1))
                     credentialField(
                         title: "阿里云盘 Token",
                         placeholder: "请输入阿里云盘 refresh token",
@@ -29,7 +29,7 @@ struct CloudDriveSettingsView: View {
 
                 Text("123 网盘无需登录凭据。夸克 Cookie 和阿里 Token 只保存在本机 Application Support 私有目录，不会触发钥匙串认证，也不会随项目上传到 GitHub。")
                     .font(.caption)
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(.secondary)
 
                 if !message.isEmpty {
                     Text(message)
@@ -69,7 +69,7 @@ struct CloudDriveSettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(title)
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(.primary)
                 Spacer()
                 Button {
                     loginProvider = provider
@@ -82,7 +82,7 @@ struct CloudDriveSettingsView: View {
             SecureField(placeholder, text: text)
                 .textFieldStyle(.plain)
                 .padding(12)
-                .background(Color.white.opacity(0.08))
+                .background(Color.primary.opacity(0.08))
                 .cornerRadius(10)
         }
         .padding(16)

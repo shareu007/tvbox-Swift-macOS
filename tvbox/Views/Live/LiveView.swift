@@ -173,6 +173,7 @@ struct LiveView: View {
             }
             #endif
         }
+        .environment(\.colorScheme, .dark)
     }
     
     // MARK: - 空状态

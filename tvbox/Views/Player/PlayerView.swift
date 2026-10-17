@@ -166,6 +166,7 @@ struct PlayerView: View {
             }
             #endif
         }
+        .environment(\.colorScheme, .dark)
         .id(selectedEngine.rawValue)
         .onAppear {
             if selectedEngine != .system {

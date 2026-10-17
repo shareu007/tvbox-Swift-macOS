@@ -218,7 +218,7 @@ struct DetailView: View {
             CachedAsyncImage(url: URL.posterURL(from: video.pic)) { image in
                 image.resizable().aspectRatio(2/3, contentMode: .fit)
             } placeholder: {
-                Color.white.opacity(0.05)
+                Color.primary.opacity(0.05)
                     .aspectRatio(2/3, contentMode: .fit)
             }
             .frame(maxHeight: posterHeight)
@@ -259,8 +259,8 @@ struct DetailView: View {
             image.resizable().aspectRatio(2/3, contentMode: .fill)
         } placeholder: {
             ZStack {
-                Color.white.opacity(0.05)
-                Image(systemName: "film.fill").foregroundColor(.white.opacity(0.2))
+                Color.primary.opacity(0.05)
+                Image(systemName: "film.fill").foregroundColor(.secondary)
             }
             .aspectRatio(2/3, contentMode: .fill)
         }
@@ -274,7 +274,7 @@ struct DetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(viewModel.vodInfo?.name ?? video.name)
                 .font(.system(size: 24, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
             
             if let info = viewModel.vodInfo {
                 VStack(alignment: .leading, spacing: 6) {
@@ -326,7 +326,7 @@ struct DetailView: View {
             Label("下载", systemImage: "arrow.down.circle")
                 .font(.system(size: 15, weight: .semibold))
                 .padding(.horizontal, 16).padding(.vertical, 12)
-                .background(Color.white.opacity(0.08)).clipShape(Capsule())
+                .background(Color.primary.opacity(0.08)).clipShape(Capsule())
         }
         .buttonStyle(.plain)
         .disabled(viewModel.currentEpisodes.isEmpty)
@@ -341,7 +341,7 @@ struct DetailView: View {
                 Text(isCollected ? "已收藏" : "收藏")
             }
             .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white)
+            .foregroundColor(isCollected ? .white : .primary)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background(
@@ -349,14 +349,14 @@ struct DetailView: View {
                     if isCollected {
                         AppTheme.accentGradient
                     } else {
-                        Color.white.opacity(0.08)
+                        Color.primary.opacity(0.08)
                     }
                 }
             )
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(Color.white.opacity(isCollected ? 0 : 0.2), lineWidth: 1)
+                    .stroke(Color.primary.opacity(isCollected ? 0 : 0.2), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -372,7 +372,7 @@ struct DetailView: View {
                     .frame(width: 36, alignment: .leading)
                 Text(value)
                     .font(.caption)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.secondary)
                     .lineLimit(2)
             }
         }
@@ -385,7 +385,7 @@ struct DetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("播放线路")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
             
             flagScrollView
         }
@@ -416,7 +416,7 @@ struct DetailView: View {
         } label: {
             Text(flag)
                 .font(.system(size: 14, weight: viewModel.selectedFlag == flag ? .bold : .medium))
-                .foregroundColor(viewModel.selectedFlag == flag ? .white : .white.opacity(0.6))
+                .foregroundColor(viewModel.selectedFlag == flag ? .white : .secondary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(
@@ -424,7 +424,7 @@ struct DetailView: View {
                         if viewModel.selectedFlag == flag {
                             AppTheme.accentGradient
                         } else {
-                            Color.white.opacity(0.05)
+                            Color.primary.opacity(0.05)
                         }
                     }
                 )
@@ -440,7 +440,7 @@ struct DetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("视频清晰度")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
@@ -466,7 +466,7 @@ struct DetailView: View {
         } label: {
             Text(option.name)
                 .font(.system(size: 14, weight: viewModel.selectedQualityId == option.id ? .bold : .medium))
-                .foregroundColor(viewModel.selectedQualityId == option.id ? .white : .white.opacity(0.6))
+                .foregroundColor(viewModel.selectedQualityId == option.id ? .white : .secondary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(
@@ -474,7 +474,7 @@ struct DetailView: View {
                         if viewModel.selectedQualityId == option.id {
                             AppTheme.accentGradient
                         } else {
-                            Color.white.opacity(0.05)
+                            Color.primary.opacity(0.05)
                         }
                     }
                 )
@@ -489,7 +489,7 @@ struct DetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("选集播放")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
                 .padding(.horizontal, 20)
             
             EpisodeListView(
@@ -511,11 +511,11 @@ struct DetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("影片简介")
                 .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
             
             Text(des)
                 .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.secondary)
                 .lineSpacing(4)
                 .lineLimit(nil)
         }

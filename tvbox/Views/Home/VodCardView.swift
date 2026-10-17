@@ -77,13 +77,13 @@ struct VodCardView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(video.name)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                     .lineLimit(2, reservesSpace: true)
                 
                 if !video.type.isEmpty {
                     Text(video.type)
                         .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.secondary)
                 }
             }
             .padding(.horizontal, 4)
@@ -97,12 +97,12 @@ struct VodCardView: View {
     /// 海报占位图，避免图片加载失败导致卡片高度塌陷。
     private var placeholderImage: some View {
         RoundedRectangle(cornerRadius: AppTheme.cardRadius)
-            .fill(Color.white.opacity(0.05))
+            .fill(Color.primary.opacity(0.05))
             .aspectRatio(2/3, contentMode: .fill)
             .overlay(
                 Image(systemName: "film.fill")
                     .font(.system(size: 30))
-                    .foregroundColor(.white.opacity(0.2))
+                    .foregroundColor(.secondary)
             )
     }
 }

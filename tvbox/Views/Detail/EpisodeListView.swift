@@ -45,15 +45,15 @@ struct EpisodeListView: View {
                             } label: {
                                 Text("\(start)-\(end)")
                                     .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(currentGroup == group ? .white : .white.opacity(0.5))
+                                    .foregroundColor(currentGroup == group ? .primary : .secondary)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
                                     .background(
                                         ZStack {
                                             if currentGroup == group {
-                                                Capsule().fill(Color.white.opacity(0.15))
+                                                Capsule().fill(Color.primary.opacity(0.15))
                                             } else {
-                                                Capsule().fill(Color.white.opacity(0.05))
+                                                Capsule().fill(Color.primary.opacity(0.05))
                                             }
                                         }
                                     )
@@ -75,7 +75,7 @@ struct EpisodeListView: View {
                     } label: {
                         Text(episode.name)
                             .font(.system(size: 13, weight: actualIndex == selectedIndex ? .bold : .medium))
-                            .foregroundColor(actualIndex == selectedIndex ? .white : .white.opacity(0.7))
+                            .foregroundColor(actualIndex == selectedIndex ? .white : .secondary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
                             .frame(maxWidth: .infinity)
@@ -85,14 +85,14 @@ struct EpisodeListView: View {
                                     if actualIndex == selectedIndex {
                                         AppTheme.accentGradient
                                     } else {
-                                        Color.white.opacity(0.05)
+                                        Color.primary.opacity(0.05)
                                     }
                                 }
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .stroke(actualIndex == selectedIndex ? Color.clear : Color.white.opacity(0.1), lineWidth: 0.5)
+                                    .stroke(actualIndex == selectedIndex ? Color.clear : Color.primary.opacity(0.1), lineWidth: 0.5)
                             )
                     }
                     .buttonStyle(.plain)

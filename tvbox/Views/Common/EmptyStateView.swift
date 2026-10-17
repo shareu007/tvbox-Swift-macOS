@@ -31,14 +31,14 @@ struct EmptyStateView: View {
             // 标题强调当前页面状态，例如“暂无收藏”“暂无播放记录”。
             Text(title)
                 .font(.title3.bold())
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(.primary)
                 .tracking(1)
             
             // 副文案用于提供下一步引导，不参与核心逻辑判断。
             if let message = message {
                 Text(message)
                     .font(.callout)
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }

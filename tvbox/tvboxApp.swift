@@ -33,6 +33,7 @@ struct tvboxApp: App {
             ContentView()
                 .environmentObject(appState)
                 .environmentObject(networkMonitor)
+                .modifier(AppAppearanceModifier())
         }
         .modelContainer(sharedModelContainer)
         #if os(macOS)

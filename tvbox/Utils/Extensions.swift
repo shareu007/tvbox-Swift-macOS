@@ -163,9 +163,9 @@ extension Double {
 struct AppTheme {
     static let primaryGradient = LinearGradient(
         colors: [
-            Color(hex: "1a1a2e"),
-            Color(hex: "16213e"),
-            Color(hex: "0f3460")
+            Color("ThemeGradientStart"),
+            Color("ThemeGradientMiddle"),
+            Color("ThemeGradientEnd")
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
@@ -177,7 +177,8 @@ struct AppTheme {
         endPoint: .trailing
     )
     
-    static let glassBackgroud = Color.white.opacity(0.1)
+    static let background = Color("ThemeBackground")
+    static let glassBackgroud = Color.primary.opacity(0.1)
     static let cardRadius: CGFloat = 16
     static let glassRadius: CGFloat = 20
 }
@@ -222,7 +223,7 @@ struct GlassBackground: ViewModifier {
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                    .stroke(Color.primary.opacity(0.15), lineWidth: 0.5)
             )
             .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 5)
     }
@@ -707,14 +708,14 @@ struct SelectionModal<Item: Identifiable & Equatable>: View {
                         // 主图标
                         Image(systemName: icon)
                             .font(.system(size: 26, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                             .frame(width: 64, height: 64)
                             .background(
                                 RoundedRectangle(cornerRadius: 18)
-                                    .fill(Color.white.opacity(0.12))
+                                    .fill(Color.primary.opacity(0.12))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 18)
-                                            .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                                            .stroke(Color.primary.opacity(0.2), lineWidth: 0.5)
                                     )
                             )
                             .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 4)
@@ -723,7 +724,7 @@ struct SelectionModal<Item: Identifiable & Equatable>: View {
                     
                     Text(title)
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                 }
                 .padding(.bottom, 24)
                 
@@ -739,7 +740,7 @@ struct SelectionModal<Item: Identifiable & Equatable>: View {
                                 HStack(spacing: 16) {
                                     Text(itemTitle(item))
                                         .font(.system(size: 15, weight: item == selectedItem ? .semibold : .medium))
-                                        .foregroundColor(item == selectedItem ? .white : .white.opacity(0.7))
+                                        .foregroundColor(item == selectedItem ? .primary : .secondary)
                                     
                                     Spacer()
                                     
@@ -750,7 +751,7 @@ struct SelectionModal<Item: Identifiable & Equatable>: View {
                                             .shadow(color: Color.orange.opacity(0.4), radius: 4)
                                     } else {
                                         Circle()
-                                            .strokeBorder(Color.white.opacity(0.15), lineWidth: 1.5)
+                                            .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1.5)
                                             .frame(width: 18, height: 18)
                                     }
                                 }
@@ -780,7 +781,7 @@ struct SelectionModal<Item: Identifiable & Equatable>: View {
                 .frame(maxHeight: 320)
                 
                 Divider()
-                    .background(Color.white.opacity(0.1))
+                    .background(Color.primary.opacity(0.1))
                     .padding(.horizontal, 24)
                 
                 // 取消按钮
@@ -794,7 +795,7 @@ struct SelectionModal<Item: Identifiable & Equatable>: View {
                 } label: {
                     Text("取消")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                 }
@@ -818,9 +819,9 @@ struct SelectionModal<Item: Identifiable & Equatable>: View {
         if item == selectedItem {
             return Color.orange.opacity(0.2)
         } else if item.id == hoverItemId {
-            return Color.white.opacity(0.1)
+            return Color.primary.opacity(0.1)
         } else {
-            return Color.white.opacity(0.04)
+            return Color.primary.opacity(0.04)
         }
     }
     
@@ -828,7 +829,7 @@ struct SelectionModal<Item: Identifiable & Equatable>: View {
         if item == selectedItem {
             return Color.orange.opacity(0.6)
         } else if item.id == hoverItemId {
-            return Color.white.opacity(0.2)
+            return Color.primary.opacity(0.2)
         } else {
             return Color.clear
         }

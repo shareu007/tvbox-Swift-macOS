@@ -109,11 +109,11 @@ struct HomeView: View {
                         .foregroundColor(.orange)
                     Text(ApiConfig.shared.homeSourceBean?.name ?? "TVBox")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                         .lineLimit(1)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.secondary)
                 }
             }
             .menuStyle(.borderlessButton)
@@ -342,7 +342,7 @@ struct HomeView: View {
                     HStack {
                         Label("发现好故事", systemImage: "sparkles")
                             .font(.title2.bold())
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                         Spacer()
                         Button { Task { await viewModel.refresh() } } label: {
                             Label("刷新推荐", systemImage: "arrow.clockwise")
@@ -361,7 +361,7 @@ struct HomeView: View {
                 if !viewModel.filteredHomeVideos.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("来源精选", systemImage: "star.fill")
-                            .font(.headline).foregroundStyle(.white)
+                            .font(.headline).foregroundStyle(.primary)
                             .padding(.horizontal, 20)
                         HomeRecommendationCards(videos: viewModel.filteredHomeVideos)
                     }
@@ -408,7 +408,7 @@ struct HomeRecommendationSectionView: View {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 5) {
                     Label(section.title, systemImage: section.isPopular ? "flame.fill" : "film.stack")
-                        .font(.headline).foregroundStyle(section.isPopular ? .orange : .white)
+                        .font(.headline).foregroundStyle(section.isPopular ? .orange : .primary)
                     Text(section.subtitle).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 12)
