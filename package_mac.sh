@@ -2,12 +2,12 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
+source scripts/build_paths.sh
 
 SCHEME="tvbox-macOS"
-BUILD_DIR="build/macos"
-APP_PATH="${BUILD_DIR}/Release/TVBox.app"
-DMG_STAGE="${BUILD_DIR}/dmg-stage"
-OUTPUT_DMG="TVBox-macOS.dmg"
+APP_PATH="${TVBOX_DERIVED_DATA_PATH}/Build/Products/Release/TVBox.app"
+DMG_STAGE="${TVBOX_DERIVED_DATA_PATH}/Packaging/macOS/dmg-stage"
+OUTPUT_DMG="${TVBOX_DERIVED_DATA_PATH}/Packages/TVBox-macOS.dmg"
 
 require_command() {
     if ! command -v "$1" >/dev/null 2>&1; then
@@ -38,10 +38,10 @@ echo "执行公开树隐私检查..."
 echo "生成最新 Xcode 工程..."
 xcodegen generate >/dev/null
 
-echo "清理 macOS 专用构建目录..."
-rm -rf "$BUILD_DIR"
+echo "清理上次的 macOS 打包产物..."
+rm -rf "$APP_PATH" "$DMG_STAGE"
 rm -f "$OUTPUT_DMG"
-mkdir -p "$BUILD_DIR"
+mkdir -p "${TVBOX_DERIVED_DATA_PATH}/Packages"
 
 echo "构建 macOS Release（Universal 2）..."
 xcodebuild \
@@ -49,7 +49,7 @@ xcodebuild \
     -scheme "$SCHEME" \
     -configuration Release \
     -destination "generic/platform=macOS" \
-    SYMROOT="$(pwd)/${BUILD_DIR}" \
+    -derivedDataPath "$TVBOX_DERIVED_DATA_PATH" \
     ARCHS="arm64 x86_64" \
     ONLY_ACTIVE_ARCH=NO \
     build

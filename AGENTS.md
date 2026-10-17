@@ -10,10 +10,16 @@ Tests are split between `tvbox-Tests/` and `tvboxTests/`; keep new tests near re
 
 - `xcodegen generate`: regenerates `tvbox.xcodeproj` from `project.yml`.
 - `open tvbox.xcodeproj`: opens the generated project in Xcode for local development.
-- `xcodebuild -project tvbox.xcodeproj -scheme tvbox -configuration Debug build`: builds the iOS app target.
-- `xcodebuild -project tvbox.xcodeproj -scheme tvbox-macOS -configuration Debug build`: builds the macOS target.
-- `xcodebuild test -project tvbox.xcodeproj -scheme tvbox -destination 'platform=iOS Simulator,name=iPhone 15'`: runs iOS unit tests on a simulator.
+- `xcodebuild -project tvbox.xcodeproj -scheme tvbox -configuration Debug -derivedDataPath build/DerivedData build`: builds the iOS app target.
+- `xcodebuild -project tvbox.xcodeproj -scheme tvbox-macOS -configuration Debug -derivedDataPath build/DerivedData build`: builds the macOS target.
+- `xcodebuild test -project tvbox.xcodeproj -scheme tvbox -derivedDataPath build/DerivedData -destination 'platform=iOS Simulator,name=iPhone 15'`: runs iOS unit tests on a simulator.
 - `./package_ios.sh` and `./package_mac.sh`: create release archives/packages; iOS packaging uses Xcode automatic signing configured only in ignored files under `Config/Local/`.
+
+## Build Output Policy
+
+The only build directory is `build/DerivedData` relative to the repository root. Every build, test, and archive command must pass `-derivedDataPath build/DerivedData` from that root; configure the same Derived Data location when using Xcode. Reuse it across platforms, configurations, and tasks. Keep package staging, archives, exported DMG/IPA files, build logs, and test results inside this directory too. The packaging scripts share this path through `scripts/build_paths.sh`.
+
+Do not create additional build roots under `build/`, `/tmp`, or Xcode's default DerivedData directory, including paths named after a feature, version, or verification run. Historical verification documents may record old paths; use this policy for new work.
 
 ## Local Installation Policy
 

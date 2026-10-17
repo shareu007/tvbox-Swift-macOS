@@ -2,14 +2,14 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
+source scripts/build_paths.sh
 
 SCHEME="tvbox"
 CONFIGURATION="Release"
-BUILD_DIR="build/ios"
-ARCHIVE_PATH="$BUILD_DIR/TVBox.xcarchive"
-EXPORT_PATH="$BUILD_DIR/exported"
+ARCHIVE_PATH="${TVBOX_DERIVED_DATA_PATH}/Archives/TVBox-iOS.xcarchive"
+EXPORT_PATH="${TVBOX_DERIVED_DATA_PATH}/Packaging/iOS/exported"
 EXPORT_OPTIONS="Config/Local/ExportOptions.plist"
-OUTPUT_IPA="TVBox.ipa"
+OUTPUT_IPA="${TVBOX_DERIVED_DATA_PATH}/Packages/TVBox.ipa"
 
 usage() {
     cat <<'EOF'
@@ -37,6 +37,7 @@ preflight() {
         xcodebuild \
             -project tvbox.xcodeproj \
             -scheme "$SCHEME" \
+            -derivedDataPath "$TVBOX_DERIVED_DATA_PATH" \
             -showdestinations 2>&1 || true
     )"
     if grep -Eq 'platform:iOS.*error:.*(is not installed|not installed)' <<<"$destinations"; then
@@ -57,6 +58,7 @@ preflight() {
             -scheme "$SCHEME" \
             -configuration "$CONFIGURATION" \
             -sdk iphoneos \
+            -derivedDataPath "$TVBOX_DERIVED_DATA_PATH" \
             -showBuildSettings 2>/dev/null || true
     )"
 
@@ -128,10 +130,10 @@ echo "生成最新 Xcode 工程..."
 xcodegen generate >/dev/null
 preflight
 
-echo "清理 iOS 构建目录..."
-rm -rf "$BUILD_DIR"
+echo "清理上次的 iOS 打包产物..."
+rm -rf "$ARCHIVE_PATH" "$EXPORT_PATH"
 rm -f "$OUTPUT_IPA"
-mkdir -p "$BUILD_DIR"
+mkdir -p "${TVBOX_DERIVED_DATA_PATH}/Archives" "${TVBOX_DERIVED_DATA_PATH}/Packages"
 
 if [[ "${TVBOX_INCLUDE_LOCAL_CONFIG:-0}" == "1" ]]; then
     echo "⚠️  本次个人构建会包含 Config/Local/TVBoxPresets.json，请勿公开发布产物。"
@@ -145,6 +147,7 @@ xcodebuild archive \
     -scheme "$SCHEME" \
     -configuration "$CONFIGURATION" \
     -destination "generic/platform=iOS" \
+    -derivedDataPath "$TVBOX_DERIVED_DATA_PATH" \
     -archivePath "$ARCHIVE_PATH" \
     -allowProvisioningUpdates
 

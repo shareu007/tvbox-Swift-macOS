@@ -40,9 +40,11 @@ open tvbox.xcodeproj
 命令行验证：
 
 ```sh
-xcodebuild test -project tvbox.xcodeproj -scheme tvbox-macOS -destination 'platform=macOS'
+xcodebuild test -project tvbox.xcodeproj -scheme tvbox-macOS -derivedDataPath build/DerivedData -destination 'platform=macOS'
 cd spider-gateway && npm test
 ```
+
+所有编译、测试和打包统一使用 `build/DerivedData`，复用同一路径。DMG / IPA 位于其中的 `Packages/`，iOS Archive 位于 `Archives/`。
 
 ## 打包
 
