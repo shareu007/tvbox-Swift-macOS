@@ -13,13 +13,16 @@ struct DownloadsView: View {
             } else {
                 List {
                     ForEach(manager.downloads) { item in
-                        row(item).padding(.vertical, 8)
+                        row(item)
+                            .padding(.vertical, 8)
+                            .listRowBackground(Color.clear)
                     }
                 }
+                .listStyle(.plain)
                 .scrollContentBackground(.hidden)
             }
         }
-        .background(AppTheme.primaryGradient)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("下载管理")
         .safeAreaInset(edge: .bottom) {
             if let error = manager.storageError {
@@ -29,6 +32,7 @@ struct DownloadsView: View {
                     .font(.caption).foregroundStyle(.secondary).padding(10)
             }
         }
+        .background(AppTheme.primaryGradient.ignoresSafeArea())
         .confirmationDialog("删除这份下载及其本地文件？", isPresented: Binding(
             get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } }
         ), titleVisibility: .visible) {

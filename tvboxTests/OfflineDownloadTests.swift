@@ -558,8 +558,6 @@ final class OfflineDownloadManagerTests: XCTestCase {
             attachment.name = "Offline downloads \(Int(width))"
             attachment.lifetime = .keepAlways
             add(attachment)
-            try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-                .write(to: URL(fileURLWithPath: "/private/tmp/tvbox-offline-downloads-\(Int(width)).png"))
             window.contentView = nil
         }
     }
