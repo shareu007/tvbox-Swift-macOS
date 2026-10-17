@@ -85,7 +85,9 @@ struct Movie: Codable {
             self.year = (try? container.decode(String.self, forKey: .year))
                 ?? (try? container.decode(Int.self, forKey: .year)).map(String.init) ?? ""
             self.area = (try? container.decode(String.self, forKey: .area)) ?? ""
-            self.type = (try? container.decode(String.self, forKey: .type)) ?? ""
+            self.type = (try? container.decode(String.self, forKey: .type))
+                ?? Self.decodeFallbackType(from: decoder)
+                ?? ""
             self.director = (try? container.decode(String.self, forKey: .director)) ?? ""
             self.actor = (try? container.decode(String.self, forKey: .actor)) ?? ""
             self.des = (try? container.decode(String.self, forKey: .des)) ?? ""
@@ -98,6 +100,21 @@ struct Movie: Codable {
             self.last = (try? container.decode(String.self, forKey: .last)) ?? ""
             self.dt = (try? container.decode(String.self, forKey: .dt)) ?? ""
             self.sourceKey = (try? container.decode(String.self, forKey: .sourceKey)) ?? ""
+        }
+
+        /// 部分源用 `vod_class`（如「动作,喜剧」）承载类型，而不填 `type_name`。
+        /// 单独用兜底 key 解码，避免污染 CodingKeys 影响合成的 encode。
+        private enum FallbackKeys: String, CodingKey {
+            case vodClass = "vod_class"
+            case vodTag = "vod_tag"
+        }
+
+        private static func decodeFallbackType(from decoder: Decoder) -> String? {
+            guard let fallback = try? decoder.container(keyedBy: FallbackKeys.self) else { return nil }
+            if let value = try? fallback.decode(String.self, forKey: .vodClass), !value.isEmpty {
+                return value
+            }
+            return try? fallback.decode(String.self, forKey: .vodTag)
         }
     }
 }

@@ -9,7 +9,7 @@ struct MediaAvailabilityService {
     private let sample: RequestSampleLoader
 
     init() {
-        sample = { try await Self.readSample($0, configuration: .ephemeral) }
+        sample = { try await Self.readSampleShared($0) }
     }
 
     init(sample: @escaping SampleLoader) {
@@ -201,6 +201,36 @@ struct MediaAvailabilityService {
         } onCancel: {
             session.invalidateAndCancel()
         }
+    }
+
+    /// 共享抽检会话：跨请求复用，避免每次抽检都新建并销毁 ephemeral 会话（会话 churn）。
+    /// 配置与 `readSample(_:configuration:)` 的逐项设置等价：无 cookie/凭证、短超时、忽略本地缓存。
+    private static let probeSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 6
+        configuration.timeoutIntervalForResource = 8
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieStorage = nil
+        configuration.urlCredentialStorage = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration)
+    }()
+
+    /// 使用共享会话抽检请求；取消时依赖结构化并发中断字节流，不销毁共享会话。
+    static func readSampleShared(_ originalRequest: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        var request = originalRequest
+        request.setValue("bytes=0-\(maximumSampleBytes - 1)", forHTTPHeaderField: "Range")
+        let (bytes, response) = try await probeSession.bytes(for: request, delegate: MediaProbeRedirectDelegate())
+        guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        var data = Data()
+        if (200...299).contains(response.statusCode) {
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                data.append(byte)
+                if data.count == maximumSampleBytes { break }
+            }
+        }
+        return (data, response)
     }
 }
 

@@ -119,8 +119,8 @@ final class SourceVerificationTests: XCTestCase {
             return ([], [])
         }, category: { _, _, _, _ in [] })
         await probe.check(configURL: url, sources: (0..<20).map { source("s\($0)") }, seconds: 0.03, requestSeconds: 1)
-        XCTAssertEqual(store.report(for: url)?.checkedCount, 3)
-        XCTAssertTrue(store.report(for: url)?.homeSummary.contains("17 个未测") == true)
+        XCTAssertEqual(store.report(for: url)?.checkedCount, 5)
+        XCTAssertTrue(store.report(for: url)?.homeSummary.contains("15 个未测") == true)
     }
 
     func testPlaybackRequiresSustainedAdvancementAndDoesNotCountSeekOrPause() {

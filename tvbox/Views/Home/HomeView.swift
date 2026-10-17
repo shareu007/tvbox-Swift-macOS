@@ -66,13 +66,6 @@ struct HomeView: View {
                         viewModel.clearFilters()
                     }
                 }
-                if !viewModel.filterScopeMessage.isEmpty {
-                    Text(viewModel.filterScopeMessage)
-                        .font(.caption).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16).padding(.bottom, 6)
-                }
-                
                 // 内容区
                 contentArea
             }
@@ -351,10 +344,6 @@ struct HomeView: View {
                         }
                         .disabled(viewModel.isLoading || viewModel.isLoadingRecommendations)
                     }
-                    Text("\(viewModel.displayedVideos.count) 部影片 · 按分类发现更多内容")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    Text("热门内容按当前来源的热度排序；推荐不代表已验证可播放。")
-                        .font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 20)
 
@@ -385,8 +374,6 @@ struct HomeView: View {
                         if !viewModel.activeFilters.isEmpty {
                             Button("重置筛选") { viewModel.clearFilters() }
                         }
-                        Text("可调整筛选、进入分类查看更多，或切换其他来源。")
-                            .font(.caption).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity).padding(24)
                 }
@@ -406,11 +393,8 @@ struct HomeRecommendationSectionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Label(section.title, systemImage: section.isPopular ? "flame.fill" : "film.stack")
-                        .font(.headline).foregroundStyle(section.isPopular ? .orange : .primary)
-                    Text(section.subtitle).font(.caption).foregroundStyle(.secondary)
-                }
+                Label(section.title, systemImage: section.isPopular ? "flame.fill" : "film.stack")
+                    .font(.headline).foregroundStyle(section.isPopular ? .orange : .primary)
                 Spacer(minLength: 12)
                 Button(action: more) {
                     Label("更多", systemImage: "chevron.right").font(.subheadline)
@@ -426,7 +410,7 @@ struct HomeRecommendationSectionView: View {
                 ProgressView("正在加载\(section.sort.name)…")
                     .frame(maxWidth: .infinity, minHeight: 100)
             } else if section.errorMessage == nil {
-                Text("暂无匹配的推荐，可调整筛选或点击更多浏览")
+                Text("暂无匹配内容")
                     .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 20)
             }
             if let error = section.errorMessage {
@@ -476,7 +460,7 @@ struct HomeBrowseFilterBar: View {
             HStack(spacing: 8) {
                 ForEach(filters, id: \.key) { filter in
                     let selected = selections[filter.key] ?? ""
-                    let label = filter.values.first { $0.v == selected }?.n ?? (filter.values.isEmpty ? "暂无选项" : "全部")
+                    let label = filter.values.first { $0.v == selected }?.n ?? "全部"
                     Menu {
                         Picker(filter.name, selection: Binding(
                             get: { selections[filter.key] ?? "" },
@@ -491,7 +475,6 @@ struct HomeBrowseFilterBar: View {
                         BrowseChip(title: "\(filter.name) · \(label)", icon: "line.3.horizontal.decrease", isSelected: !selected.isEmpty)
                     }
                     .menuStyle(.borderlessButton)
-                    .disabled(filter.values.isEmpty)
                     .accessibilityLabel("\(filter.name)：\(label)")
                 }
                 if !selections.isEmpty {

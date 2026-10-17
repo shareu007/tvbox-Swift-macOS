@@ -74,19 +74,12 @@ struct VodCardView: View {
             }
             
             // 标题
-            VStack(alignment: .leading, spacing: 2) {
-                Text(video.name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(2, reservesSpace: true)
-                
-                if !video.type.isEmpty {
-                    Text(video.type)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.horizontal, 4)
+            Text(video.name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.primary)
+                .lineLimit(2, reservesSpace: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
         }
         #if os(iOS)
         .frame(minWidth: 44, minHeight: 44)

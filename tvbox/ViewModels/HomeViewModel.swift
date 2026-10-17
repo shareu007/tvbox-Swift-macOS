@@ -86,7 +86,9 @@ class HomeViewModel: ObservableObject {
     var browseFilters: [MovieSort.SortFilter] {
         if selectedSort?.isRecommendation == true {
             let videos = homeVideos + recommendationSections.flatMap(\.videos)
-            return HomeBrowseFacet.allCases.map { $0.filter(sorts: sorts, videos: videos, selected: recommendationFilters[$0.rawValue]) }
+            return HomeBrowseFacet.allCases
+                .map { $0.filter(sorts: sorts, videos: videos, selected: recommendationFilters[$0.rawValue]) }
+                .filter { !$0.values.isEmpty }
         }
         guard let sort = selectedSort else { return [] }
         var filters = sort.filters
@@ -96,19 +98,15 @@ class HomeViewModel: ObservableObject {
                 filters.removeAll(where: facet.recognizes)
             }
             if !filters.contains(where: facet.recognizes) {
-                filters.append(facet.filter(sorts: [], videos: categoryVideos, selected: selectedFilters[facet.rawValue]))
+                // 分类未声明该 facet 时，仅从本分类已加载影片合成（不并入全站声明值，
+                // 否则会把其它分类的选项泄漏进来，导致服务端筛选参数错配）。
+                let synthesized = facet.filter(sorts: [], videos: categoryVideos, selected: selectedFilters[facet.rawValue])
+                if !synthesized.values.isEmpty {
+                    filters.append(synthesized)
+                }
             }
         }
         return filters
-    }
-    var filterScopeMessage: String {
-        if selectedSort?.isRecommendation == true {
-            if !isLoadingRecommendations, browseFilters.allSatisfy({ $0.values.isEmpty }) {
-                return "当前来源未提供年份和国家/地区信息，可切换其他来源使用筛选。"
-            }
-            return "来源支持时筛选片库，其余仅筛选已加载影片；缺少信息的影片不计入结果。"
-        }
-        return localCategoryFilters.isEmpty ? "" : "当前条件仅筛选已加载影片，可继续加载更多；缺少信息的影片不计入结果。"
     }
     private var localCategoryFilters: [String: String] {
         guard let sort = selectedSort else { return [:] }

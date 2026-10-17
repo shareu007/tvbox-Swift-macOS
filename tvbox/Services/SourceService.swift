@@ -1,10 +1,39 @@
 import Foundation
 
+/// type=4 源的 extend 内容缓存：同一 URL 在 TTL 内只下载一次，
+/// 避免每次 getList/search 都重新拉取。只缓存成功结果，失败回源。
+actor ExtendContentCache {
+    static let shared = ExtendContentCache()
+
+    private struct Entry {
+        let content: String
+        let expiresAt: Date
+    }
+
+    private var entries: [String: Entry] = [:]
+    private let ttl: TimeInterval = 600
+    private let maximumEntries = 32
+
+    func cachedContent(for url: String, now: Date = Date()) -> String? {
+        guard let entry = entries[url], entry.expiresAt > now else { return nil }
+        return entry.content
+    }
+
+    func store(_ content: String, for url: String, now: Date = Date()) {
+        if entries.count >= maximumEntries, entries[url] == nil {
+            if let oldest = entries.min(by: { $0.value.expiresAt < $1.value.expiresAt })?.key {
+                entries.removeValue(forKey: oldest)
+            }
+        }
+        entries[url] = Entry(content: content, expiresAt: now.addingTimeInterval(ttl))
+    }
+}
+
 /// 视频源数据服务 - 对应 Android 版 SourceViewModel.java
 /// 负责从各视频源获取分类、列表、详情和搜索数据
 class SourceService {
     static let shared = SourceService()
-    
+
     private let network: NetworkManager
 
     init(network: NetworkManager = .shared) {
@@ -38,10 +67,11 @@ class SourceService {
         
         let resolvedExtend = sourceBean.type == 4 ? await resolveExtend(sourceBean.ext ?? "") : ""
         let jsonStr: String
-        if sourceBean.type == 0 {
-            // XML 接口
-            jsonStr = try await network.getString(from: api, maxRetries: maxRetries)
-        } else if sourceBean.type == 4 {
+        // ac=class 响应通常没有带海报的推荐列表；与分类请求并发预取列表接口，
+        // 需要兜底时直接复用结果，减少一次串行等待。
+        var speculativeListURL: String?
+        var speculativeListTask: Task<[Movie.Video]?, Never>?
+        if sourceBean.type == 4 {
             // Type 4: 远程接口，需要 extend 和 filter 参数
             var queryItems: [URLQueryItem] = [
                 URLQueryItem(name: "filter", value: "true")
@@ -50,53 +80,59 @@ class SourceService {
                 queryItems.append(URLQueryItem(name: "extend", value: resolvedExtend))
             }
             let url = try buildURL(base: api, queryItems: queryItems)
+            // type=4 列表用 ac=detail 格式，与 getList 保持一致
+            let ext = Data("{}".utf8).base64EncodedString()
+            speculativeListURL = try buildURL(
+                base: api,
+                queryItems: [
+                    URLQueryItem(name: "ac", value: "detail"),
+                    URLQueryItem(name: "filter", value: "true"),
+                    URLQueryItem(name: "pg", value: "1"),
+                    URLQueryItem(name: "ext", value: ext),
+                    URLQueryItem(name: "extend", value: resolvedExtend)
+                ]
+            )
+            let listURL = speculativeListURL!
+            speculativeListTask = Task { try? await self.loadVideoList(url: listURL, source: sourceBean, maxRetries: 0) }
             jsonStr = try await network.getString(from: url, maxRetries: maxRetries)
+        } else if sourceBean.type == 0 {
+            // XML 接口
+            jsonStr = try await network.getString(from: api, maxRetries: maxRetries)
         } else {
             // JSON 接口 (type=1)
             let url = try buildURL(
                 base: api,
                 queryItems: [URLQueryItem(name: "ac", value: "class")]
             )
+            // type=1 列表用 ac=videolist 格式
+            let listURL = try buildURL(
+                base: api,
+                queryItems: [
+                    URLQueryItem(name: "ac", value: "videolist"),
+                    URLQueryItem(name: "pg", value: "1")
+                ]
+            )
+            speculativeListURL = listURL
+            speculativeListTask = Task { try? await self.loadVideoList(url: listURL, source: sourceBean, maxRetries: 0) }
             jsonStr = try await network.getString(from: url, maxRetries: maxRetries)
         }
-        
+        defer { speculativeListTask?.cancel() }
+
         var (sorts, homeVideos) = try parseSort(jsonStr, sourceBean: sourceBean)
-        
+
         // 当大多数推荐视频的 vod_pic 为空时（ac=class 接口常见情况），
-        // 额外请求列表接口获取带完整海报的推荐视频
+        // 使用列表接口获取带完整海报的推荐视频
         let picMissingCount = homeVideos.filter { $0.pic.trimmingCharacters(in: .whitespaces).isEmpty }.count
         let needsFallback = homeVideos.isEmpty || picMissingCount > homeVideos.count / 2
-        
-        if needsFallback && (sourceBean.type == 1 || sourceBean.type == 4) {
-            let listUrl: String
-            if sourceBean.type == 4 {
-                // type=4 用 ac=detail 格式，与 getList 保持一致
-                let ext = Data("{}".utf8).base64EncodedString()
-                listUrl = try buildURL(
-                    base: api,
-                    queryItems: [
-                        URLQueryItem(name: "ac", value: "detail"),
-                        URLQueryItem(name: "filter", value: "true"),
-                        URLQueryItem(name: "pg", value: "1"),
-                        URLQueryItem(name: "ext", value: ext),
-                        URLQueryItem(name: "extend", value: resolvedExtend)
-                    ]
-                )
-            } else {
-                // type=1 用 ac=videolist 格式
-                listUrl = try buildURL(
-                    base: api,
-                    queryItems: [
-                        URLQueryItem(name: "ac", value: "videolist"),
-                        URLQueryItem(name: "pg", value: "1")
-                    ]
-                )
-            }
-            if let fallback = try? await loadVideoList(url: listUrl, source: sourceBean, maxRetries: maxRetries), !fallback.isEmpty {
+
+        if needsFallback, let listURL = speculativeListURL {
+            if let speculative = await speculativeListTask?.value, !speculative.isEmpty {
+                homeVideos = speculative
+            } else if let fallback = try? await loadVideoList(url: listURL, source: sourceBean, maxRetries: maxRetries), !fallback.isEmpty {
                 homeVideos = fallback
             }
         }
-        
+
         return (sorts, homeVideos)
     }
     
@@ -117,7 +153,11 @@ class SourceService {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 // 解析分类
                 if let classList = json["class"] as? [[String: Any]] {
-                    sorts = Self.categoriesWithFilters(Self.leafCategories(from: classList), object: json)
+                    sorts = Self.categoriesWithFilters(
+                        Self.leafCategories(from: classList),
+                        object: json,
+                        parentIDs: Self.parentIDs(from: classList)
+                    )
                 }
                 
                 // 解析首页推荐视频
@@ -165,15 +205,39 @@ class SourceService {
         return ""
     }
 
+    /// 提取 type_id → type_pid 的映射，用于子分类沿父链继承筛选声明。
+    static func parentIDs(from classList: [[String: Any]]) -> [String: String] {
+        var parents: [String: String] = [:]
+        for item in classList {
+            let id = flexibleString(item["type_id"])
+            let pid = flexibleString(item["type_pid"])
+            guard !id.isEmpty, !pid.isEmpty, pid != "0" else { continue }
+            parents[id] = pid
+        }
+        return parents
+    }
+
     /// TVBox 的筛选值可能是数字；保留接口参数，并去掉会造成重复控件的键和值。
-    static func categoriesWithFilters(_ categories: [MovieSort.SortData], object: [String: Any]) -> [MovieSort.SortData] {
+    /// CMS 常把年份/地区筛选声明在父分类 ID 上，叶子分类需沿父链继承（最多 6 层，防环）。
+    static func categoriesWithFilters(_ categories: [MovieSort.SortData], object: [String: Any], parentIDs: [String: String] = [:]) -> [MovieSort.SortData] {
         let filtersByID = object["filters"] as? [String: Any] ?? [:]
         return categories.map { category in
             var category = category
-            var keys = Set<String>()
-            category.filters = (filtersByID[category.id] as? [[String: Any]] ?? []).compactMap { raw in
+            category.filters = declaredFilters(for: category.id, filtersByID: filtersByID, parentIDs: parentIDs)
+            return category
+        }
+    }
+
+    private static func declaredFilters(for id: String, filtersByID: [String: Any], parentIDs: [String: String]) -> [MovieSort.SortFilter] {
+        var keys = Set<String>()
+        var filters: [MovieSort.SortFilter] = []
+        var currentID = id
+        var visited = Set<String>()
+        while !currentID.isEmpty, visited.insert(currentID).inserted, visited.count <= 6 {
+            let rawFilters = filtersByID[currentID] as? [[String: Any]] ?? []
+            for raw in rawFilters {
                 let key = flexibleString(raw["key"])
-                guard !key.isEmpty, keys.insert(key).inserted else { return nil }
+                guard !key.isEmpty, keys.insert(key).inserted else { continue }
                 var values = Set<String>()
                 let options = (raw["value"] as? [[String: Any]] ?? []).compactMap { option -> MovieSort.SortFilter.SortFilterValue? in
                     guard option["v"] != nil else { return nil }
@@ -182,11 +246,12 @@ class SourceService {
                     guard !name.isEmpty, values.insert(value).inserted else { return nil }
                     return .init(n: name, v: value)
                 }
-                guard !options.isEmpty else { return nil }
-                return MovieSort.SortFilter(key: key, name: flexibleString(raw["name"]), values: options)
+                guard !options.isEmpty else { continue }
+                filters.append(MovieSort.SortFilter(key: key, name: flexibleString(raw["name"]), values: options))
             }
-            return category
+            currentID = parentIDs[currentID] ?? ""
         }
+        return filters
     }
     
     // MARK: - 获取分类视频列表
@@ -462,8 +527,9 @@ class SourceService {
         return await withTaskGroup(of: [Movie.Video].self) { group in
             for (index, source) in sources.enumerated() {
                 group.addTask { [self] in
-                    // 给主页源一个很短的抢跑窗口，避免同一 CatVod bundle 的请求乱序排队。
-                    if index > 0 {
+                    // 仅对 Spider 源抢跑：同一 CatVod bundle 经网关串行，避免请求乱序排队。
+                    // 普通 HTTP 源相互独立，无需人为延迟，直接并发以加快搜索。
+                    if index > 0, source.type == 3 {
                         try? await Task.sleep(nanoseconds: 120_000_000)
                     }
                     return await self.searchWithTimeout(source: source, keyword: keyword)
@@ -637,13 +703,19 @@ class SourceService {
         guard extend.hasPrefix("http://") || extend.hasPrefix("https://") else {
             return extend
         }
-        
+
+        // TTL 内复用已下载的 extend 内容，避免重复网络请求
+        if let cached = await ExtendContentCache.shared.cachedContent(for: extend) {
+            return cached
+        }
+
         // 从 HTTP URL 加载 extend 内容
         do {
             let content = try await network.getString(from: extend)
             let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
             // 如果内容过长（>2500），回退到使用原始 URL
             if trimmed.count > 2500 { return extend }
+            await ExtendContentCache.shared.store(trimmed, for: extend)
             return trimmed
         } catch {
             return extend

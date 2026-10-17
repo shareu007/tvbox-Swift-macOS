@@ -344,7 +344,11 @@ final class SpiderGatewayService {
 
     private func parseSorts(_ object: [String: Any]) -> [MovieSort.SortData] {
         guard let values = object["class"] as? [[String: Any]] else { return [] }
-        return SourceService.categoriesWithFilters(SourceService.leafCategories(from: values), object: object)
+        return SourceService.categoriesWithFilters(
+            SourceService.leafCategories(from: values),
+            object: object,
+            parentIDs: SourceService.parentIDs(from: values)
+        )
     }
 
     private func parseVideos(_ object: [String: Any], sourceKey: String) -> [Movie.Video] {

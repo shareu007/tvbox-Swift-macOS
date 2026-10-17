@@ -176,6 +176,52 @@ final class HomeBrowseFilterTests: XCTestCase {
         XCTAssertTrue(HomeBrowseFacet.matching([video], selections: ["year": "2023"]).isEmpty)
     }
 
+    func testVodClassFillsTypeWhenTypeNameMissing() throws {
+        let video = try JSONDecoder().decode(Movie.Video.self, from: Data(#"{"vod_id":1,"vod_class":"动作,喜剧"}"#.utf8))
+        XCTAssertEqual(video.type, "动作,喜剧")
+        XCTAssertEqual(Set(HomeBrowseFacet.genre.values(in: video)), ["动作", "喜剧"])
+        let preferred = try JSONDecoder().decode(Movie.Video.self, from: Data(#"{"vod_id":1,"type_name":"剧情","vod_class":"动作"}"#.utf8))
+        XCTAssertEqual(preferred.type, "剧情", "type_name 优先于 vod_class")
+    }
+
+    func testGenreFacetNormalizesAliasesTraditionalAndSuffixes() {
+        XCTAssertEqual(HomeBrowseFacet.canonicalGenre("驚悚片"), "惊悚")
+        XCTAssertEqual(HomeBrowseFacet.canonicalGenre("动作片"), "动作")
+        XCTAssertEqual(HomeBrowseFacet.canonicalGenre("纪录片"), "纪录片", "整词类型不应被剥掉「片」尾缀")
+        XCTAssertEqual(HomeBrowseFacet.canonicalGenre("動漫"), "动画")
+        XCTAssertEqual(HomeBrowseFacet.canonicalGenre("搞笑"), "喜剧")
+        var video = Movie.Video(id: "v")
+        video.type = "动作 / 喜剧片 · 科幻"
+        XCTAssertEqual(HomeBrowseFacet.genre.values(in: video), ["动作", "喜剧", "科幻"])
+    }
+
+    func testGenreFacetSortsCanonicalGenresBeforeAlphabeticalTail() {
+        var action = Movie.Video(id: "a"); action.type = "动作"
+        var comedy = Movie.Video(id: "c"); comedy.type = "喜剧"
+        var obscure = Movie.Video(id: "o"); obscure.type = "黑色电影"
+        let filter = HomeBrowseFacet.genre.filter(sorts: [], videos: [obscure, comedy, action], selected: nil)
+        XCTAssertEqual(filter.values.map(\.n).prefix(2), ["动作", "喜剧"], "常见类型按 Netflix 风格顺序排前")
+        XCTAssertTrue(filter.values.map(\.n).contains("黑色电影"))
+    }
+
+    func testYearFacetRecognizesEraNamedAndKeyedFilters() {
+        XCTAssertTrue(HomeBrowseFacet.year.recognizes(.init(key: "nianfen", name: "年代", values: [])))
+        XCTAssertTrue(HomeBrowseFacet.year.recognizes(.init(key: "release_year", name: "上映", values: [])))
+        XCTAssertFalse(HomeBrowseFacet.area.recognizes(.init(key: "nianfen", name: "年代", values: [])))
+        XCTAssertTrue(HomeBrowseFacet.area.recognizes(.init(key: "region", name: "区域", values: [])))
+        XCTAssertTrue(HomeBrowseFacet.genre.recognizes(.init(key: "class", name: "剧情", values: [])))
+    }
+
+    func testFacetsWithoutAnyValuesAreHiddenFromBrowseFilters() async {
+        let source = SourceBean(key: "test", api: "https://example.com", type: 1)
+        let movie = MovieSort.SortData(id: "movie", name: "电影")
+        let model = HomeViewModel(currentSource: { source }, sortLoader: { _ in ([movie], []) }) { _, _, _, _ in
+            [Movie.Video(id: "v")]
+        }
+        await model.refresh()
+        XCTAssertTrue(model.browseFilters.isEmpty, "无年份/地区/类型信息时不应渲染空的筛选控件")
+    }
+
     func testLeafMovieCategoriesProduceMovieRecommendationBeforeOtherFamilies() async {
         let source = SourceBean(key: "test", api: "https://example.com", type: 1)
         let categories = ["国产剧", "欧美剧", "动漫", "综艺", "动作片", "喜剧片"].map {

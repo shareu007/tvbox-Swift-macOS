@@ -316,9 +316,8 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
         .task(id: url) {
             await loadImage()
         }
-        .onDisappear {
-            loadedImage = nil
-        }
+        // 不在 onDisappear 清空 loadedImage：列表滚动复用时会闪回占位图。
+        // 内存由 ImageCache(NSCache) 在压力下自动回收，@State 随视图身份释放。
     }
     
     private func loadImage() async {
