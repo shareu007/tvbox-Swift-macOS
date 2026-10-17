@@ -20,6 +20,9 @@ struct ProfileView: View {
                     NavigationLink(destination: HistoryView()) {
                         profileRow(icon: "clock.fill", title: "播放历史", color: .orange)
                     }
+                    NavigationLink(destination: DownloadsView(manager: .shared)) {
+                        profileRow(icon: "arrow.down.circle.fill", title: "离线下载", color: .orange)
+                    }
                     NavigationLink(destination: SettingsView()) {
                         profileRow(icon: "gearshape.fill", title: "设置", color: .gray)
                     }

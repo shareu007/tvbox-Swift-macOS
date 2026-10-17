@@ -13,6 +13,7 @@
 - 支持 CatVod `index.js` / `index.js.md5`、Basic Auth、校验、会话复用与自动回收。
 - 夸克、夸父、盘搜等网盘搜索协议；夸克网页登录获取 Cookie 并原生播放。
 - 播放时阻止自动休眠，退出后释放播放器、Timer、Node 与缓存资源。
+- 当前源码支持[离线下载](docs/offline-downloads.md)：详情选集、直链文件与普通点播 HLS、暂停续传、任务管理及本地播放；尚未发布安装包。
 
 ## 支持边界
 

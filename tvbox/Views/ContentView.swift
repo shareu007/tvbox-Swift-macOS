@@ -114,6 +114,8 @@ struct ContentView: View {
                     .tag(3)
                 Label("历史", systemImage: "clock.fill")
                     .tag(5)
+                Label("下载", systemImage: "arrow.down.circle.fill")
+                    .tag(6)
                 Label("设置", systemImage: "gearshape.fill")
                     .tag(4)
             }
@@ -132,6 +134,10 @@ struct ContentView: View {
             case 5:
                 NavigationStack {
                     HistoryView()
+                }
+            case 6:
+                NavigationStack {
+                    DownloadsView(manager: .shared)
                 }
             default: configurationContent { HomeView() }
             }

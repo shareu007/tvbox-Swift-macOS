@@ -108,7 +108,7 @@ struct PlayerView: View {
         } else {
             rawValue = PlayerEngine.system.rawValue
         }
-        return PlayerEngine.fromStoredValue(rawValue)
+        return OfflinePlaybackPolicy.engine(for: URL(string: urlString), preferred: PlayerEngine.fromStoredValue(rawValue))
     }
     
     var body: some View {

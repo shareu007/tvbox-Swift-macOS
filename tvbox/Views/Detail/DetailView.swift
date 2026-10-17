@@ -24,6 +24,7 @@ struct DetailView: View {
     #endif
     @State private var lastPersistedProgress: Double = 0
     @State private var isCollected = false
+    @State private var showDownloadSelection = false
     
     var body: some View {
         ScrollView {
@@ -113,6 +114,12 @@ struct DetailView: View {
         }
         .background(AppTheme.primaryGradient)
         .navigationTitle(video.name)
+        .sheet(isPresented: $showDownloadSelection) {
+            if let info = viewModel.vodInfo {
+                DownloadSelectionView(info: info, flag: viewModel.selectedFlag,
+                                      selectedIndex: viewModel.selectedEpisodeIndex, manager: .shared)
+            }
+        }
         #if os(macOS)
         .toolbar((showFullScreen || pendingMacWindowFullScreen) ? .hidden : .visible, for: .windowToolbar)
         #endif
@@ -224,6 +231,7 @@ struct DetailView: View {
             HStack(spacing: 12) {
                 playButton
                 collectButton
+                downloadButton
             }
             .frame(minHeight: 48)
         }
@@ -284,6 +292,7 @@ struct DetailView: View {
             HStack(spacing: 10) {
                 playButton
                 collectButton
+                downloadButton
             }
             #endif
         }
@@ -312,6 +321,17 @@ struct DetailView: View {
         }
     }
     
+    private var downloadButton: some View {
+        Button { showDownloadSelection = true } label: {
+            Label("下载", systemImage: "arrow.down.circle")
+                .font(.system(size: 15, weight: .semibold))
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .background(Color.white.opacity(0.08)).clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.currentEpisodes.isEmpty)
+    }
+
     private var collectButton: some View {
         Button {
             toggleCollect()
