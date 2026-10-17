@@ -15,6 +15,10 @@ Tests are split between `tvbox-Tests/` and `tvboxTests/`; keep new tests near re
 - `xcodebuild test -project tvbox.xcodeproj -scheme tvbox -destination 'platform=iOS Simulator,name=iPhone 15'`: runs iOS unit tests on a simulator.
 - `./package_ios.sh` and `./package_mac.sh`: create release archives/packages; iOS packaging uses Xcode automatic signing configured only in ignored files under `Config/Local/`.
 
+## Local Installation Policy
+
+By default, finish development with builds and verification, leaving the locally installed app untouched. Install or replace the local app only when the user explicitly requests installation for the current task; earlier installation requests do not authorize installation after future development work.
+
 ## Coding Style & Naming Conventions
 
 Use Swift 5.9 and SwiftUI conventions already present in the repository. Prefer four-space indentation, `PascalCase` for types, `camelCase` for properties/functions, and descriptive suffixes such as `View`, `ViewModel`, `Service`, and `Manager`. Keep UI code in `Views/`, state and business logic in `ViewModels/`, networking/config parsing in `Services/`, and shared extensions in `Utils/`.
