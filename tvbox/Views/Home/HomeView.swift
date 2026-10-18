@@ -69,7 +69,7 @@ struct HomeView: View {
                 // 内容区
                 contentArea
             }
-            .background(AppTheme.primaryGradient)
+            .background(AppTheme.background)
         }
         .task {
             await viewModel.refreshIfNeeded()
@@ -80,6 +80,12 @@ struct HomeView: View {
     
     private var headerBar: some View {
         HStack(spacing: 12) {
+            Text("TVBOX")
+                .font(.system(size: 23, weight: .black))
+                .tracking(-0.8)
+                .foregroundStyle(.orange)
+                .accessibilityLabel("TVBox 首页")
+            Spacer(minLength: 16)
             // 源切换按钮
             Menu {
                 ForEach(ApiConfig.shared.sourceBeanList.filter { $0.isHomeEligible }) { source in
@@ -101,7 +107,7 @@ struct HomeView: View {
                         .font(.system(size: 14))
                         .foregroundColor(.orange)
                     Text(ApiConfig.shared.homeSourceBean?.name ?? "TVBox")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     Image(systemName: "chevron.down")
@@ -110,13 +116,11 @@ struct HomeView: View {
                 }
             }
             .menuStyle(.borderlessButton)
-            .fixedSize()
-            
-            Spacer()
+            .frame(maxWidth: 260, alignment: .trailing)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 4)
+        .padding(.horizontal, 28)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
     }
     
     // MARK: - 分类标签栏
@@ -130,7 +134,7 @@ struct HomeView: View {
                             Button {
                                 viewModel.selectCategoryGroup(group)
                             } label: {
-                                BrowseChip(title: group.title, isSelected: viewModel.selectedCategoryGroup?.id == group.id)
+                                HomeCinemaCategoryLabel(title: group.title, isSelected: viewModel.selectedCategoryGroup?.id == group.id)
                             }
                             .buttonStyle(.plain)
                             .id(group.id)
@@ -330,14 +334,12 @@ struct HomeView: View {
 
     private var recommendationContent: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 24) {
+            LazyVStack(alignment: .leading, spacing: 28) {
+                if !viewModel.displayedVideos.isEmpty {
+                    HomeCinemaHero(videos: viewModel.displayedVideos)
+                }
                 if !viewModel.filteredHomeVideos.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Label("来源精选", systemImage: "star.fill")
-                            .font(.headline).foregroundStyle(.primary)
-                            .padding(.horizontal, 20)
-                        HomeRecommendationCards(videos: viewModel.filteredHomeVideos)
-                    }
+                    HomeCinemaShelf(title: "为你精选", videos: viewModel.filteredHomeVideos)
                 }
 
                 ForEach(viewModel.visibleRecommendationSections) { section in
@@ -362,7 +364,8 @@ struct HomeView: View {
                     .frame(maxWidth: .infinity).padding(24)
                 }
             }
-            .padding(.vertical, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
         .refreshable { await viewModel.refresh() }
     }
@@ -376,26 +379,28 @@ struct HomeRecommendationSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center) {
-                Label(section.title, systemImage: section.isPopular ? "flame.fill" : "film.stack")
-                    .font(.headline).foregroundStyle(section.isPopular ? .orange : .primary)
-                Spacer(minLength: 12)
-                Button(action: more) {
-                    Label("更多", systemImage: "chevron.right").font(.subheadline)
-                        .frame(minHeight: 44)
-                }
-                .buttonStyle(.plain).foregroundStyle(.orange)
-                .accessibilityLabel("更多\(section.title)")
-            }
-            .padding(.horizontal, 20)
             if !section.videos.isEmpty {
-                HomeRecommendationCards(videos: section.videos)
-            } else if section.isLoading {
-                ProgressView("正在加载\(section.sort.name)…")
-                    .frame(maxWidth: .infinity, minHeight: 100)
-            } else if section.errorMessage == nil {
-                Text("暂无匹配内容")
-                    .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 20)
+                HomeCinemaShelf(title: section.title, videos: section.videos, more: more)
+            } else {
+                HStack {
+                    Text(section.title).font(.system(size: 21, weight: .bold))
+                    Spacer()
+                    if section.isLoading {
+                        ProgressView().controlSize(.small)
+                            .accessibilityLabel("正在加载\(section.title)")
+                    } else if section.errorMessage == nil {
+                        Text("暂无匹配内容").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Button(action: more) {
+                        Label("查看全部", systemImage: "chevron.right")
+                            .font(.system(size: 12, weight: .medium))
+                            .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("查看全部\(section.title)")
+                }
+                .padding(.horizontal, 28)
             }
             if let error = section.errorMessage {
                 HStack {
@@ -403,35 +408,12 @@ struct HomeRecommendationSectionView: View {
                     Spacer()
                     Button("重试", action: retry).frame(minHeight: 44)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 28)
             }
         }
     }
 }
 
-private struct HomeRecommendationCards: View {
-    let videos: [Movie.Video]
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(alignment: .top, spacing: 14) {
-                ForEach(videos, id: \.resourceID) { video in
-                    NavigationLink(value: video) {
-                        VodCardView(video: video)
-                            .frame(width: 140)
-                    }
-                    #if os(iOS)
-                    .buttonStyle(VodCardPressStyle())
-                    #else
-                    .buttonStyle(.plain)
-                    #endif
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 4)
-        }
-    }
-}
 
 struct HomeBrowseFilterBar: View {
     let filters: [MovieSort.SortFilter]
