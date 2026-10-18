@@ -1,17 +1,21 @@
 import Foundation
+#if os(iOS)
+import UIKit
+#endif
 
-#if os(macOS)
-/// 播放期间阻止 macOS 因空闲而关闭显示器或进入系统睡眠。
+/// 播放期间阻止屏幕因空闲而关闭。
 /// 使用 owner 引用计数，兼容内联/全屏播放器短暂并存的切换过程。
 @MainActor
 final class PlaybackSleepPreventer {
     static let shared = PlaybackSleepPreventer()
 
     private var activeOwners: Set<UUID> = []
+    #if os(macOS)
     private var activity: (any NSObjectProtocol)?
+    #endif
 
     var activeOwnerCount: Int { activeOwners.count }
-    var isPreventingSleep: Bool { activity != nil }
+    var isPreventingSleep: Bool { !activeOwners.isEmpty }
 
     private init() {}
 
@@ -30,6 +34,9 @@ final class PlaybackSleepPreventer {
     }
 
     private func updateActivity() {
+        #if os(iOS)
+        UIApplication.shared.isIdleTimerDisabled = !activeOwners.isEmpty
+        #elseif os(macOS)
         if activeOwners.isEmpty {
             if let activity {
                 ProcessInfo.processInfo.endActivity(activity)
@@ -43,6 +50,6 @@ final class PlaybackSleepPreventer {
             options: [.userInitiated, .idleDisplaySleepDisabled],
             reason: "TVBox 正在播放视频"
         )
+        #endif
     }
 }
-#endif

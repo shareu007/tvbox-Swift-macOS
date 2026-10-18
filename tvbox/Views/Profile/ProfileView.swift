@@ -28,6 +28,9 @@ struct ProfileView: View {
                     }
                 }
             }
+            .listStyle(.insetGrouped)
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
             .navigationTitle("个人中心")
             .navigationBarTitleDisplayMode(.large)
             .background(AppTheme.primaryGradient)
@@ -39,10 +42,11 @@ struct ProfileView: View {
 
     private var profileHeader: some View {
         VStack(spacing: 12) {
-            Image("AppIcon")
-                .resizable()
+            Image(systemName: "play.tv.fill")
+                .font(.system(size: 32, weight: .semibold))
+                .foregroundStyle(.white)
                 .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .background(AppTheme.accentGradient, in: RoundedRectangle(cornerRadius: 16))
             Text("TVBox v\(appVersion)")
                 .font(.caption)
                 .foregroundColor(.secondary)

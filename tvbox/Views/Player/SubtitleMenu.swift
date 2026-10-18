@@ -27,6 +27,9 @@ struct SubtitleMenu: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
+                #if os(iOS)
+                .frame(minWidth: 44, minHeight: 44)
+                #endif
                 .background(Color.white.opacity(0.12))
                 .clipShape(Capsule())
         }

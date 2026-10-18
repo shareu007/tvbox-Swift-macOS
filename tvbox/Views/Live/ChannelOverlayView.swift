@@ -23,6 +23,7 @@ struct ChannelOverlayView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let panelWidth = AdaptiveMediaLayout.channelPanelWidth(availableWidth: geometry.size.width)
             ZStack {
                 // Dimmed background - tap to dismiss
                 Color.black.opacity(0.5)
@@ -41,7 +42,7 @@ struct ChannelOverlayView: View {
                     // Two-column layout
                     HStack(spacing: 0) {
                         groupList
-                            .frame(width: Self.computeGroupWidth(screenWidth: geometry.size.width))
+                            .frame(width: Self.computeGroupWidth(screenWidth: panelWidth))
 
                         Divider()
                             .overlay(Color.white.opacity(0.1))
@@ -49,16 +50,16 @@ struct ChannelOverlayView: View {
                         channelList
                     }
                 }
+                .frame(width: panelWidth)
                 .frame(maxHeight: geometry.size.height * 0.85)
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .offset(y: max(dragOffset, 0))
-                .gesture(dismissDragGesture)
-                .padding(.top, geometry.safeAreaInsets.top + 40)
             }
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: dragOffset)
+        .environment(\.colorScheme, .dark)
     }
 
     // MARK: - Handle Bar
@@ -70,13 +71,25 @@ struct ChannelOverlayView: View {
                 .frame(width: 36, height: 5)
                 .padding(.top, 10)
 
-            Text("频道列表")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white.opacity(0.9))
-                .padding(.bottom, 8)
+            HStack {
+                Text("频道列表")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                Spacer()
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("关闭频道列表")
+            }
+            .padding(.leading, 16)
         }
         .frame(maxWidth: .infinity)
         .background(Color.white.opacity(0.05))
+        .contentShape(Rectangle())
+        .gesture(dismissDragGesture)
     }
 
     // MARK: - Group List (Left Column)

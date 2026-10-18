@@ -10,16 +10,15 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     
     #if os(iOS)
-    /// iOS 网格配置。
-    private let columns = [
-        GridItem(.adaptive(minimum: 120, maximum: 160), spacing: 12)
-    ]
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    private var gridMetrics: PosterGridMetrics {
+        PosterGridMetrics(isRegularWidth: horizontalSizeClass == .regular)
+    }
     #else
-    /// macOS 网格配置。
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
-    ]
+    private let gridMetrics = PosterGridMetrics()
     #endif
+
+    private var columns: [GridItem] { gridMetrics.columns }
     
     var body: some View {
         historyContent
@@ -34,7 +33,7 @@ struct HistoryView: View {
                 emptyState
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 16) {
+                    LazyVGrid(columns: columns, spacing: gridMetrics.spacing) {
                         // 记录卡片支持跳转详情与右键删除。
                         ForEach(records) { item in
                             NavigationLink(destination: DetailView(video: movieVideo(from: item))) {

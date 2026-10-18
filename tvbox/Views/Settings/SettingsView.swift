@@ -200,8 +200,10 @@ struct SettingsView: View {
                         SettingsRow(icon: "tv", title: "直播分组", value: "\(apiConfig.liveChannelGroupList.count)", action: nil)
                     }
                 }
+                .frame(maxWidth: 760)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 24)
+                .frame(maxWidth: .infinity)
             }
             .background(AppTheme.primaryGradient.ignoresSafeArea())
             .navigationTitle("设置")

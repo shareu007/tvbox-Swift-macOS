@@ -100,6 +100,7 @@ struct ContentView: View {
                 .tag(3)
         }
         .tint(.orange)
+        .modifier(MobileTabNavigationModifier())
         .onChange(of: selectedTab) { _, _ in
             HapticManager.shared.selection()
         }
@@ -422,6 +423,19 @@ struct ContentView: View {
         #endif
     }
 }
+
+#if os(iOS)
+/// 系统在 iPad 上提供可切换侧栏，窄窗口和 iPhone 保留标签导航。
+private struct MobileTabNavigationModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.tabViewStyle(.sidebarAdaptable)
+        } else {
+            content
+        }
+    }
+}
+#endif
 
 #if os(macOS)
 /// 首页保留侧栏和窗口控件，只隐藏系统自动生成的标题。

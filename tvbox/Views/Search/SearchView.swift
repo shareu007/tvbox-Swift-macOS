@@ -17,18 +17,18 @@ struct SearchView: View {
         self.embeddedInNavigationStack = embeddedInNavigationStack
     }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var isSearchFocused: Bool
 
     #if os(iOS)
-    /// iOS 卡片网格参数。
-    private let columns = [
-        GridItem(.adaptive(minimum: 120, maximum: 160), spacing: 12)
-    ]
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    private var gridMetrics: PosterGridMetrics {
+        PosterGridMetrics(isRegularWidth: horizontalSizeClass == .regular)
+    }
     #else
-    /// macOS 卡片网格参数。
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
-    ]
+    private let gridMetrics = PosterGridMetrics()
     #endif
+
+    private var columns: [GridItem] { gridMetrics.columns }
 
     var body: some View {
         Group {
@@ -107,11 +107,13 @@ struct SearchView: View {
                     .foregroundColor(.secondary)
 
                 TextField("搜索影片...", text: $viewModel.keyword)
+                    .focused($isSearchFocused)
                     .textFieldStyle(.plain)
                     .font(.system(size: 16))
                     .foregroundColor(.primary)
                     .submitLabel(.search)
                     .onSubmit {
+                        isSearchFocused = false
                         viewModel.submitSearch()
                     }
                     #if os(iOS)
@@ -140,6 +142,7 @@ struct SearchView: View {
             )
 
             Button {
+                isSearchFocused = false
                 viewModel.submitSearch()
             } label: {
                 Text("搜索")
@@ -217,7 +220,7 @@ struct SearchView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 40)
                     }
-                    LazyVGrid(columns: columns, spacing: 16) {
+                    LazyVGrid(columns: columns, spacing: gridMetrics.spacing) {
                         ForEach(groups) { group in
                             NavigationLink(value: group) {
                                 VStack(alignment: .leading, spacing: 6) {
@@ -239,6 +242,7 @@ struct SearchView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
             }
+            .scrollDismissesKeyboard(.interactively)
         }
         .navigationDestination(for: SearchResultGroup.self) { selected in
             // 慢源补充年份后分组 ID 可能变化，通过原始资源继续定位当前剧目。
@@ -308,6 +312,7 @@ struct SearchView: View {
                     ForEach(viewModel.searchHistory, id: \.self) { keyword in
                         Button {
                             viewModel.keyword = keyword
+                            isSearchFocused = false
                             viewModel.submitSearch()
                         } label: {
                             Text(keyword)
@@ -367,7 +372,7 @@ struct FlowLayout: Layout {
             positions.append(CGPoint(x: currentX, y: currentY))
             lineHeight = max(lineHeight, size.height)
             currentX += size.width + spacing
-            maxX = max(maxX, currentX)
+            maxX = max(maxX, currentX - spacing)
         }
 
         return (CGSize(width: maxX, height: currentY + lineHeight), positions)

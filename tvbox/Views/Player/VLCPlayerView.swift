@@ -899,9 +899,7 @@ struct VLCVodPlayerView: View {
     @State private var osdOpacity: Double = 0
     @State private var osdTimer: Timer?
     @State private var startPlaybackTask: Task<Void, Never>?
-    #if os(macOS)
     @State private var sleepPreventionOwner = UUID()
-    #endif
     
     private var controller: VLCPlayerController {
         sharedController ?? ownedController
@@ -955,6 +953,7 @@ struct VLCVodPlayerView: View {
                     .padding(12)
                     #endif
                     .opacity(showControls ? 1.0 : 0.0)
+                    .allowsHitTesting(showControls)
                     .animation(.easeInOut(duration: 0.3), value: showControls)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
@@ -991,9 +990,7 @@ struct VLCVodPlayerView: View {
         .onAppear {
             startPlayback()
             wakeUpControls()
-            #if os(macOS)
             PlaybackSleepPreventer.shared.setPlaybackActive(controller.isPlaying, owner: sleepPreventionOwner)
-            #endif
         }
         .onChange(of: urlString) { _, _ in
             startPlayback()
@@ -1008,15 +1005,12 @@ struct VLCVodPlayerView: View {
                 draggingSeconds = newValue
             }
         }
-        #if os(macOS)
         .onChange(of: controller.isPlaying) { _, playing in
             PlaybackSleepPreventer.shared.setPlaybackActive(playing, owner: sleepPreventionOwner)
         }
-        #endif
+
         .onDisappear {
-            #if os(macOS)
             PlaybackSleepPreventer.shared.end(owner: sleepPreventionOwner)
-            #endif
             startPlaybackTask?.cancel()
             startPlaybackTask = nil
             if sharedController == nil {
@@ -1156,83 +1150,23 @@ struct VLCVodPlayerView: View {
             .padding(.top, 8)
             .padding(.bottom, 4)
             
-            // 控制按钮行 — 紧凑排列
-            HStack(spacing: 0) {
-                // 左：倍速
+            MobilePlayerControlRow(
+                availableWidth: containerWidth,
+                isPlaying: controller.isPlaying,
+                seekStep: seekStep,
+                canPlayNext: canPlayNext,
+                onSeek: { offset in
+                    wakeUpControls()
+                    controller.seek(by: offset)
+                },
+                onTogglePlayback: { wakeUpControls(); togglePlaybackWithOSD() },
+                onPlayNext: onPlayNext.map { action in { wakeUpControls(); action() } },
+                onToggleFullScreen: onToggleFullScreen.map { action in { wakeUpControls(); action() } }
+            ) {
                 playbackRateMenu
-                    .frame(minWidth: 36, alignment: .leading)
-                subtitleMenu.padding(.leading, 4)
-                
-                Spacer()
-                
-                // 中间：主控按钮
-                HStack(spacing: containerWidth < 420 ? 8 : 20) {
-                    Button {
-                        wakeUpControls()
-                        controller.seek(by: -seekStep)
-                        showOSD(icon: "gobackward.\(Int(seekStep))")
-                    } label: {
-                        Image(systemName: "gobackward.\(Int(seekStep))")
-                            .font(.system(size: 16, weight: .medium))
-                            .frame(minWidth: 36, minHeight: 36)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Button {
-                        wakeUpControls()
-                        togglePlaybackWithOSD()
-                    } label: {
-                        Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 20, weight: .bold))
-                            .frame(minWidth: 36, minHeight: 36)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Button {
-                        wakeUpControls()
-                        controller.seek(by: seekStep)
-                        showOSD(icon: "goforward.\(Int(seekStep))")
-                    } label: {
-                        Image(systemName: "goforward.\(Int(seekStep))")
-                            .font(.system(size: 16, weight: .medium))
-                            .frame(minWidth: 36, minHeight: 36)
-                    }
-                    .buttonStyle(.plain)
-
-                    if let onPlayNext {
-                        Button {
-                            guard canPlayNext else { return }
-                            wakeUpControls()
-                            onPlayNext()
-                            showOSD(icon: "forward.end.fill")
-                        } label: {
-                            Image(systemName: "forward.end.fill")
-                                .font(.system(size: 16, weight: .medium))
-                                .frame(minWidth: 36, minHeight: 36)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!canPlayNext)
-                        .opacity(canPlayNext ? 1 : 0.4)
-                    }
-                }
-                
-                Spacer()
-                
-                // 右：全屏
-                if let onToggleFullScreen {
-                    Button {
-                        wakeUpControls()
-                        onToggleFullScreen()
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 14, weight: .bold))
-                            .frame(minWidth: 36, minHeight: 36)
-                    }
-                    .buttonStyle(.plain)
-                }
+            } subtitles: {
+                subtitleMenu
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 6)
             #else
             // macOS: 保持两行布局
             HStack(spacing: 12) {
@@ -1476,9 +1410,7 @@ struct VLCLivePlayerView: View {
     @State private var osdTimer: Timer?
     @State private var showControls = true
     @State private var controlsTimer: Timer?
-    #if os(macOS)
     @State private var sleepPreventionOwner = UUID()
-    #endif
     
     var body: some View {
         ZStack {
@@ -1523,6 +1455,7 @@ struct VLCLivePlayerView: View {
         .overlay(alignment: .bottom) {
             liveControlsOverlay
                 .opacity(showControls ? 1.0 : 0.0)
+                    .allowsHitTesting(showControls)
                 .animation(.easeInOut(duration: 0.3), value: showControls)
         }
         #endif
@@ -1550,9 +1483,7 @@ struct VLCLivePlayerView: View {
         .onAppear {
             startPlayback()
             wakeUpControls()
-            #if os(macOS)
             PlaybackSleepPreventer.shared.setPlaybackActive(controller.isPlaying, owner: sleepPreventionOwner)
-            #endif
         }
         .onChange(of: urlString) { _, _ in
             startPlayback()
@@ -1561,15 +1492,12 @@ struct VLCLivePlayerView: View {
         .onChange(of: activityToken) { _, _ in
             wakeUpControls()
         }
-        #if os(macOS)
         .onChange(of: controller.isPlaying) { _, playing in
             PlaybackSleepPreventer.shared.setPlaybackActive(playing, owner: sleepPreventionOwner)
         }
-        #endif
+
         .onDisappear {
-            #if os(macOS)
             PlaybackSleepPreventer.shared.end(owner: sleepPreventionOwner)
-            #endif
             controller.stop()
             osdTimer?.invalidate()
             controlsTimer?.invalidate()

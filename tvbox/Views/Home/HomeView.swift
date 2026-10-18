@@ -9,18 +9,26 @@ struct HomeView: View {
     
     // 网格布局
     #if os(iOS)
-    private let columns = [
-        GridItem(.adaptive(minimum: 100, maximum: 140), spacing: 10)
-    ]
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    private var gridMetrics: PosterGridMetrics {
+        PosterGridMetrics(isRegularWidth: horizontalSizeClass == .regular)
+    }
     #else
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
-    ]
+    private let gridMetrics = PosterGridMetrics()
     #endif
+
+    private var columns: [GridItem] { gridMetrics.columns }
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                #if os(iOS)
+                if !viewModel.sorts.isEmpty {
+                    categoryTabBar
+                        .frame(minHeight: 44)
+                        .padding(.vertical, 4)
+                }
+                #else
                 HStack(spacing: 12) {
                     if !viewModel.sorts.isEmpty {
                         categoryTabBar
@@ -32,6 +40,7 @@ struct HomeView: View {
                 .frame(height: 44)
                 .padding(.trailing, 24)
                 .padding(.vertical, 4)
+                #endif
 
                 if viewModel.isLoadingHome || viewModel.homeLoadMessage != nil {
                     HStack {
@@ -75,6 +84,13 @@ struct HomeView: View {
                 contentArea
             }
             .background(AppTheme.background)
+            #if os(iOS)
+            .navigationTitle("首页")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { sourceSelector }
+            }
+            #endif
         }
         .task {
             await viewModel.refreshIfNeeded()
@@ -190,7 +206,7 @@ struct HomeView: View {
                         Spacer()
                     }
                     .padding(.horizontal, 20)
-                    LazyVGrid(columns: columns, spacing: 16) {
+                    LazyVGrid(columns: columns, spacing: gridMetrics.spacing) {
                         ForEach(0..<8) { _ in
                             VodCardView(video: Movie.Video(name: "正在加载"))
                                 .redacted(reason: .placeholder)
@@ -252,7 +268,7 @@ struct HomeView: View {
                 let videos = viewModel.displayedVideos
                 
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 16) {
+                    LazyVGrid(columns: columns, spacing: gridMetrics.spacing) {
                         ForEach(videos) { video in
                             NavigationLink(value: video) {
                                 VodCardView(video: video)

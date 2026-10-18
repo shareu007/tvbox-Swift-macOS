@@ -46,12 +46,10 @@ struct LiveView: View {
     private let channelInfoAutoHideDelay: TimeInterval = 3.0
     /// 用户交互令牌，递增后可通知 VLC 子视图重置自动隐藏逻辑。
     @State private var vlcInteractionToken = 0
-    #if os(macOS)
     /// 系统直播播放器的显示器防休眠 owner。
     @State private var sleepPreventionOwner = UUID()
     /// 跟踪系统直播播放器是否真正进入播放状态。
     @State private var playerTimeControlObserver: NSKeyValueObservation?
-    #endif
     
     /// 当前实际生效的播放器内核。
     /// 优先读取直播专用字段，再回退老字段，最后使用默认值。
@@ -77,6 +75,16 @@ struct LiveView: View {
                 
                 if viewModel.channelGroups.isEmpty {
                     emptyState
+                    #if os(iOS)
+                    VStack {
+                        HStack {
+                            liveBackButton
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+                    .padding(16)
+                    #endif
                 } else {
                     // 播放器
                     if selectedEngine == .mpv {
@@ -331,7 +339,7 @@ struct LiveView: View {
             Image(systemName: "chevron.left")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(.white.opacity(0.9))
-                .frame(width: 38, height: 38)
+                .frame(width: 44, height: 44)
                 .background(Color.black.opacity(0.35))
                 .clipShape(Circle())
                 .overlay(
@@ -340,6 +348,7 @@ struct LiveView: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("返回首页")
     }
     #endif
     
@@ -438,6 +447,7 @@ struct LiveView: View {
         }
         .padding(16)
         .glassCard(cornerRadius: 14)
+        .frame(maxWidth: currentChannelInfoMaxWidth)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
@@ -628,24 +638,20 @@ struct LiveView: View {
         observePlaybackFailure(for: playerItem)
         
         let newPlayer = AVPlayer(playerItem: playerItem)
-        #if os(macOS)
         playerTimeControlObserver = newPlayer.observe(\.timeControlStatus, options: [.initial, .new]) { player, _ in
             let isPlaying = player.timeControlStatus == .playing
             DispatchQueue.main.async {
                 PlaybackSleepPreventer.shared.setPlaybackActive(isPlaying, owner: sleepPreventionOwner)
             }
         }
-        #endif
         newPlayer.play()
         avPlayer = newPlayer
     }
     
     private func cleanupPlayer() {
-        #if os(macOS)
         playerTimeControlObserver?.invalidate()
         playerTimeControlObserver = nil
         PlaybackSleepPreventer.shared.end(owner: sleepPreventionOwner)
-        #endif
         // 先移除观察者再释放播放器，避免悬空回调。
         if let observer = playbackFailedObserver {
             NotificationCenter.default.removeObserver(observer)

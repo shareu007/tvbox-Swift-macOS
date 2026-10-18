@@ -5,6 +5,14 @@ struct HomeCinemaShelf: View {
     let title: String
     let videos: [Movie.Video]
     var more: (() -> Void)? = nil
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    private var gridMetrics: PosterGridMetrics {
+        PosterGridMetrics(isRegularWidth: horizontalSizeClass == .regular)
+    }
+    #else
+    private let gridMetrics = PosterGridMetrics()
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -29,11 +37,7 @@ struct HomeCinemaShelf: View {
                     ForEach(videos, id: \.resourceID) { video in
                         NavigationLink(value: video) {
                             HomeCinemaPosterCard(video: video)
-                                #if os(iOS)
-                                .frame(width: 136)
-                                #else
-                                .frame(width: 164)
-                                #endif
+                                .frame(width: gridMetrics.shelfPosterWidth)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(video.name + (video.note.isEmpty ? "" : "，\(video.note)"))

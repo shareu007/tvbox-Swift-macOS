@@ -224,9 +224,7 @@ struct AVPlayerContentView: View {
     @State private var playerObservers: [NSKeyValueObservation] = []
     @State private var ownedSubtitles = SystemSubtitleController()
     private var subtitles: SystemSubtitleController { sharedController?.subtitles ?? ownedSubtitles }
-    #if os(macOS)
     @State private var sleepPreventionOwner = UUID()
-    #endif
     
     @State private var videoZoomScale: CGFloat = 1.0
 
@@ -309,6 +307,7 @@ struct AVPlayerContentView: View {
                 if player != nil {
                     playbackControls(containerWidth: proxy.size.width)
                         .opacity(showControls ? 1.0 : 0.0)
+                        .allowsHitTesting(showControls)
                         .animation(.easeInOut(duration: 0.3), value: showControls)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 }
@@ -337,9 +336,7 @@ struct AVPlayerContentView: View {
             syncRateFromSettings()
             setupPlayer()
             wakeUpControls()
-            #if os(macOS)
             PlaybackSleepPreventer.shared.setPlaybackActive(isPlaying, owner: sleepPreventionOwner)
-            #endif
         }
         .onChange(of: urlString) { _, _ in
             syncRateFromSettings()
@@ -351,15 +348,12 @@ struct AVPlayerContentView: View {
             setupPlayer()
             wakeUpControls()
         }
-        #if os(macOS)
         .onChange(of: isPlaying) { _, playing in
             PlaybackSleepPreventer.shared.setPlaybackActive(playing, owner: sleepPreventionOwner)
         }
-        #endif
+
         .onDisappear {
-            #if os(macOS)
             PlaybackSleepPreventer.shared.end(owner: sleepPreventionOwner)
-            #endif
             cleanupPlayer(keepSharedPlayer: sharedController != nil)
             controlsTimer?.invalidate()
             osdTimer?.invalidate()
@@ -672,83 +666,23 @@ struct AVPlayerContentView: View {
             .padding(.top, 8)
             .padding(.bottom, 4)
             
-            // 控制按钮行 — 紧凑排列
-            HStack(spacing: 0) {
-                // 左：倍速
+            MobilePlayerControlRow(
+                availableWidth: containerWidth,
+                isPlaying: isPlaying,
+                seekStep: seekStep,
+                canPlayNext: canPlayNext,
+                onSeek: { offset in
+                    wakeUpControls()
+                    seek(by: offset)
+                },
+                onTogglePlayback: { wakeUpControls(); togglePlayPauseWithOSD() },
+                onPlayNext: onPlayNext.map { action in { wakeUpControls(); action() } },
+                onToggleFullScreen: onToggleFullScreen.map { action in { wakeUpControls(); action() } }
+            ) {
                 playbackRateMenu
-                    .frame(minWidth: 36, alignment: .leading)
-                subtitleMenu.padding(.leading, 4)
-                
-                Spacer()
-                
-                // 中间：主控按钮
-                HStack(spacing: containerWidth < 420 ? 8 : 20) {
-                    Button {
-                        wakeUpControls()
-                        seek(by: -seekStep)
-                        showOSD(icon: "gobackward.\(Int(seekStep))")
-                    } label: {
-                        Image(systemName: "gobackward.\(Int(seekStep))")
-                            .font(.system(size: 16, weight: .medium))
-                            .frame(minWidth: 36, minHeight: 36)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Button {
-                        wakeUpControls()
-                        togglePlayPauseWithOSD()
-                    } label: {
-                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 20, weight: .bold))
-                            .frame(minWidth: 36, minHeight: 36)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    Button {
-                        wakeUpControls()
-                        seek(by: seekStep)
-                        showOSD(icon: "goforward.\(Int(seekStep))")
-                    } label: {
-                        Image(systemName: "goforward.\(Int(seekStep))")
-                            .font(.system(size: 16, weight: .medium))
-                            .frame(minWidth: 36, minHeight: 36)
-                    }
-                    .buttonStyle(.plain)
-
-                    if let onPlayNext {
-                        Button {
-                            guard canPlayNext else { return }
-                            wakeUpControls()
-                            onPlayNext()
-                            showOSD(icon: "forward.end.fill")
-                        } label: {
-                            Image(systemName: "forward.end.fill")
-                                .font(.system(size: 16, weight: .medium))
-                                .frame(minWidth: 36, minHeight: 36)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!canPlayNext)
-                        .opacity(canPlayNext ? 1 : 0.4)
-                    }
-                }
-                
-                Spacer()
-                
-                // 右：全屏
-                if let onToggleFullScreen {
-                    Button {
-                        wakeUpControls()
-                        onToggleFullScreen()
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 14, weight: .bold))
-                            .frame(minWidth: 36, minHeight: 36)
-                    }
-                    .buttonStyle(.plain)
-                }
+            } subtitles: {
+                subtitleMenu
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 6)
             #else
             // macOS: 保持两行布局
             HStack(spacing: 12) {

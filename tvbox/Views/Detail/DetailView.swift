@@ -27,71 +27,28 @@ struct DetailView: View {
     @State private var showDownloadSelection = false
     
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 0) {
-                    Color.clear.frame(height: 0).id("detail-top")
-                    if viewModel.isLoading {
-                        ProgressView("正在读取剧集…").padding()
-                    }
-                    // 播放器区域
-                    if !showFullScreen, !isFullScreenDismissing, viewModel.isPlaying, let url = viewModel.playUrl {
-                        PlayerView(
-                            urlString: url,
-                            headers: viewModel.playbackHeaders,
-                            sourceSubtitles: viewModel.sourceSubtitles,
-                            startPosition: viewModel.currentPlaybackSeconds(),
-                            onProgressChanged: handlePlaybackProgress,
-                            onPlaybackEnded: playNextEpisodeIfNeeded,
-                            onToggleFullScreen: {
-                                openFullScreenPlayer()
-                            },
-                            canPlayNext: canPlayNextEpisode,
-                            onPlayNext: playNextEpisodeIfNeeded,
-                            systemController: sharedSystemController,
-                            vlcController: sharedVLCController,
-                            mpvController: sharedMPVController
-                        )
-                            .id("\(viewModel.selectedFlag)-\(viewModel.selectedEpisodeIndex)-\(url)")
-                            .aspectRatio(16/9, contentMode: .fit)
-                            .background(Color.black)
-                            .onTapGesture(count: 2) {
-                                openFullScreenPlayer()
-                            }
-                    }
-
-                    if let error = viewModel.errorMessage, !error.isEmpty {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                            Text(error)
-                                .font(.callout)
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        Color.clear.frame(height: 0).id("detail-top")
+                        if viewModel.isLoading {
+                            ProgressView("正在读取剧集…").padding()
                         }
-                        .foregroundColor(.red.opacity(0.9))
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        AdaptivePlaybackLayout(availableWidth: geometry.size.width, isPlaying: viewModel.isPlaying,
+                                               allowsColumns: allowsPlaybackColumns) {
+                            playbackSection
+                        } episodes: {
+                            if !viewModel.currentEpisodes.isEmpty {
+                                episodeSection
+                            }
+                        }
                     }
-                
-                    // 视频信息
-                    videoInfoSection
-                
-                    if let notice = viewModel.playbackNotice, viewModel.isPlaying {
-                        Label(notice.message, systemImage: "info.circle")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 8)
-                    }
-
-                    // 剧集列表
-                    if !viewModel.currentEpisodes.isEmpty {
-                        episodeSection
-                    }
+                    .padding(.bottom, 40)
                 }
-                .padding(.bottom, 40)
-            }
-            .onChange(of: viewModel.playUrl) { _, url in
-                if url != nil { proxy.scrollTo("detail-top", anchor: .top) }
+                .onChange(of: viewModel.playUrl) { _, url in
+                    if url != nil { proxy.scrollTo("detail-top", anchor: .top) }
+                }
             }
         }
         .background(AppTheme.background)
@@ -116,6 +73,10 @@ struct DetailView: View {
             refreshCollectState()
         }
         .onDisappear {
+            #if os(iOS)
+            // fullScreenCover 会让详情页暂时消失，全屏仍需复用当前播放会话。
+            guard !showFullScreen, !isFullScreenDismissing else { return }
+            #endif
             viewModel.commitPlaybackProgressSnapshot()
             persistHistoryIfNeeded(force: true)
             showFullScreen = false
@@ -189,6 +150,67 @@ struct DetailView: View {
         #endif
     }
     
+    private var allowsPlaybackColumns: Bool {
+        #if os(iOS)
+        true
+        #else
+        false
+        #endif
+    }
+
+    private var playbackSection: some View {
+        VStack(spacing: 0) {
+            // 播放器区域
+            if !showFullScreen, !isFullScreenDismissing, viewModel.isPlaying, let url = viewModel.playUrl {
+                PlayerView(
+                    urlString: url,
+                    headers: viewModel.playbackHeaders,
+                    sourceSubtitles: viewModel.sourceSubtitles,
+                    startPosition: viewModel.currentPlaybackSeconds(),
+                    onProgressChanged: handlePlaybackProgress,
+                    onPlaybackEnded: playNextEpisodeIfNeeded,
+                    onToggleFullScreen: {
+                        openFullScreenPlayer()
+                    },
+                    canPlayNext: canPlayNextEpisode,
+                    onPlayNext: playNextEpisodeIfNeeded,
+                    systemController: sharedSystemController,
+                    vlcController: sharedVLCController,
+                    mpvController: sharedMPVController
+                )
+                    .id("\(viewModel.selectedFlag)-\(viewModel.selectedEpisodeIndex)-\(url)")
+                    .aspectRatio(16/9, contentMode: .fit)
+                    .background(Color.black)
+                    .onTapGesture(count: 2) {
+                        openFullScreenPlayer()
+                    }
+            }
+
+            if let error = viewModel.errorMessage, !error.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text(error)
+                        .font(.callout)
+                }
+                .foregroundColor(.red.opacity(0.9))
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            // 视频信息
+            videoInfoSection
+
+            if let notice = viewModel.playbackNotice, viewModel.isPlaying {
+                Label(notice.message, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+            }
+        }
+    }
+
     // MARK: - 影片信息与操作
 
     private var displayInfo: VodInfo {
@@ -516,7 +538,6 @@ struct FullScreenPlayerView: View {
                 vlcController: vlcController,
                 mpvController: mpvController
             )
-                .ignoresSafeArea()
             
             VStack {
                 HStack {
@@ -530,7 +551,9 @@ struct FullScreenPlayerView: View {
                         Image(systemName: "xmark.circle.fill")
                             .font(.title2)
                             .foregroundColor(.white.opacity(0.8))
+                            .frame(minWidth: 44, minHeight: 44)
                     }
+                    .accessibilityLabel("关闭全屏播放")
                     Spacer()
                 }
                 .padding()

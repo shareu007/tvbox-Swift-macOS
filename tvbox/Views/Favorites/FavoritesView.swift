@@ -10,16 +10,15 @@ struct FavoritesView: View {
     @Environment(\.modelContext) private var modelContext
     
     #if os(iOS)
-    /// iOS 下卡片尺寸更紧凑，适配手机竖屏。
-    private let columns = [
-        GridItem(.adaptive(minimum: 120, maximum: 160), spacing: 12)
-    ]
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    private var gridMetrics: PosterGridMetrics {
+        PosterGridMetrics(isRegularWidth: horizontalSizeClass == .regular)
+    }
     #else
-    /// macOS 下卡片适度放大，提升桌面端可读性。
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 16)
-    ]
+    private let gridMetrics = PosterGridMetrics()
     #endif
+
+    private var columns: [GridItem] { gridMetrics.columns }
     
     var body: some View {
         favoritesContent
@@ -34,7 +33,7 @@ struct FavoritesView: View {
                 emptyState
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 16) {
+                    LazyVGrid(columns: columns, spacing: gridMetrics.spacing) {
                         // 每个收藏项都可直接跳转详情，并支持右键取消收藏。
                         ForEach(favorites) { item in
                             NavigationLink(destination: DetailView(video: movieVideo(from: item))) {
