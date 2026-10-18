@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// 根视图 - 对应 Android 版 HomeActivity 的 TabView 导航
 struct ContentView: View {
@@ -141,6 +144,7 @@ struct ContentView: View {
             default: configurationContent { HomeView() }
             }
         }
+        .modifier(HomeWindowTitleModifier(isHidden: selectedTab == 0))
         #endif
     }
     
@@ -418,6 +422,50 @@ struct ContentView: View {
         #endif
     }
 }
+
+#if os(macOS)
+/// 首页保留侧栏和窗口控件，只隐藏系统自动生成的标题。
+private struct HomeWindowTitleModifier: ViewModifier {
+    let isHidden: Bool
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.toolbar(removing: isHidden ? .title : nil)
+        } else {
+            content.background(LegacyWindowTitleVisibility(isHidden: isHidden))
+        }
+    }
+}
+
+/// macOS 14 尚未提供默认工具栏标题项的 SwiftUI 开关。
+private struct LegacyWindowTitleVisibility: NSViewRepresentable {
+    let isHidden: Bool
+
+    func makeNSView(context: Context) -> TitleView { TitleView() }
+
+    func updateNSView(_ view: TitleView, context: Context) {
+        view.isTitleHidden = isHidden
+        view.applyVisibility()
+    }
+
+    static func dismantleNSView(_ view: TitleView, coordinator: ()) {
+        view.window?.titleVisibility = .visible
+    }
+
+    final class TitleView: NSView {
+        var isTitleHidden = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            applyVisibility()
+        }
+
+        func applyVisibility() {
+            window?.titleVisibility = isTitleHidden ? .hidden : .visible
+        }
+    }
+}
+#endif
 
 
 /// 配置恢复状态显示在首页内部，不再短暂展示首次使用表单。
