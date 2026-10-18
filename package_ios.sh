@@ -10,12 +10,15 @@ ARCHIVE_PATH="${TVBOX_DERIVED_DATA_PATH}/Archives/TVBox-iOS.xcarchive"
 EXPORT_PATH="${TVBOX_DERIVED_DATA_PATH}/Packaging/iOS/exported"
 EXPORT_OPTIONS="Config/Local/ExportOptions.plist"
 OUTPUT_IPA="${TVBOX_DERIVED_DATA_PATH}/Packages/TVBox.ipa"
+UNSIGNED_BUILD=0
+CHECK_ONLY=0
 
 usage() {
     cat <<'EOF'
-用法: ./package_ios.sh [--check]
+用法: ./package_ios.sh [--check] [--unsigned]
 
   --check  只检查 Xcode、iOS 平台和签名配置，不清理或构建产物。
+  --unsigned  生成未签名 IPA，安装前需用侧载工具自行签名。
 EOF
 }
 
@@ -49,6 +52,11 @@ preflight() {
     if ! grep -q 'platform:iOS' <<<"$destinations"; then
         echo "❌ 当前 Xcode 没有可用的 iOS 构建目标。" >&2
         return 1
+    fi
+
+    if [[ "$UNSIGNED_BUILD" == "1" ]]; then
+        echo "✅ iOS 平台检查通过；将生成需要重新签名的 IPA。"
+        return 0
     fi
 
     local build_settings
@@ -110,21 +118,19 @@ preflight() {
     echo "✅ iOS 打包预检通过（签名值未输出）。"
 }
 
-case "${1:-}" in
-    "") ;;
-    --check)
-        preflight
-        exit 0
-        ;;
-    -h|--help)
-        usage
-        exit 0
-        ;;
-    *)
-        usage >&2
-        exit 2
-        ;;
-esac
+for argument in "$@"; do
+    case "$argument" in
+        --check) CHECK_ONLY=1 ;;
+        --unsigned) UNSIGNED_BUILD=1 ;;
+        -h|--help) usage; exit 0 ;;
+        *) usage >&2; exit 2 ;;
+    esac
+done
+
+if [[ "$CHECK_ONLY" == "1" ]]; then
+    preflight
+    exit 0
+fi
 
 echo "生成最新 Xcode 工程..."
 xcodegen generate >/dev/null
@@ -141,7 +147,13 @@ else
     echo "Release 使用公开空预设，不会把本机接口打入安装包。"
 fi
 
-echo "开始构建 iOS Archive（Xcode 自动签名）..."
+signing_arguments=(-allowProvisioningUpdates)
+if [[ "$UNSIGNED_BUILD" == "1" ]]; then
+    signing_arguments=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM=)
+    echo "开始构建未签名 iOS Archive..."
+else
+    echo "开始构建 iOS Archive（Xcode 自动签名）..."
+fi
 xcodebuild archive \
     -project tvbox.xcodeproj \
     -scheme "$SCHEME" \
@@ -149,7 +161,19 @@ xcodebuild archive \
     -destination "generic/platform=iOS" \
     -derivedDataPath "$TVBOX_DERIVED_DATA_PATH" \
     -archivePath "$ARCHIVE_PATH" \
-    -allowProvisioningUpdates
+    "${signing_arguments[@]}"
+
+if [[ "$UNSIGNED_BUILD" == "1" ]]; then
+    unsigned_staging="${TVBOX_DERIVED_DATA_PATH}/Packaging/iOS/unsigned"
+    archived_app="${ARCHIVE_PATH}/Products/Applications/TVBox.app"
+    [[ -d "$archived_app" ]] || { echo "❌ Archive 中缺少 TVBox.app" >&2; exit 1; }
+    rm -rf "$unsigned_staging"
+    mkdir -p "$unsigned_staging/Payload"
+    ditto "$archived_app" "$unsigned_staging/Payload/TVBox.app"
+    ditto -c -k --keepParent --norsrc --noextattr "$unsigned_staging/Payload" "$OUTPUT_IPA"
+    echo "✅ 未签名 IPA: $OUTPUT_IPA（安装前需要重新签名）"
+    exit 0
+fi
 
 if [[ ! -f "$EXPORT_OPTIONS" ]]; then
     echo "✅ Archive 已生成: $ARCHIVE_PATH"
@@ -160,6 +184,7 @@ fi
 echo "导出 IPA..."
 mkdir -p "$EXPORT_PATH"
 xcodebuild -exportArchive \
+    -derivedDataPath "$TVBOX_DERIVED_DATA_PATH" \
     -archivePath "$ARCHIVE_PATH" \
     -exportOptionsPlist "$EXPORT_OPTIONS" \
     -exportPath "$EXPORT_PATH" \

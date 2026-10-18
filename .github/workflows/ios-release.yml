@@ -1,0 +1,145 @@
+name: iPhone and iPad IPA
+
+on:
+  push:
+    branches:
+      - 'release/ios-universal-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      TVBOX_INCLUDE_LOCAL_CONFIG: '0'
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare project
+        run: |
+          mkdir -p build/DerivedData
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          ./scripts/audit_public_tree.sh
+          xcodegen generate
+          xcodebuild -version
+
+      - name: Test iPhone and iPad layouts
+        run: |
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          Path('build/DerivedData/TestResults').mkdir(parents=True, exist_ok=True)
+          devices = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '--json']))['devices']
+          available = [device for runtime, group in devices.items() if 'iOS-18-5' in runtime for device in group]
+          for family in ['iPhone', 'iPad']:
+              device = next(device for device in available if device['name'].startswith(family))
+              args = ['xcodebuild', 'test', '-project', 'tvbox.xcodeproj', '-scheme', 'tvbox',
+                      '-derivedDataPath', 'build/DerivedData', '-destination', 'platform=iOS Simulator,id=' + device['udid'],
+                      '-resultBundlePath', 'build/DerivedData/TestResults/' + family + '.xcresult',
+                      '-only-testing:tvbox-Tests/AdaptiveMediaLayoutTests',
+                      '-only-testing:tvbox-Tests/PlaybackSleepPreventerTests', 'CODE_SIGNING_ALLOWED=NO']
+              with Path('build/DerivedData/' + family + '-tests.log').open('w') as log:
+                  result = subprocess.run(args, stdout=log, stderr=subprocess.STDOUT)
+              if result.returncode:
+                  print(Path('build/DerivedData/' + family + '-tests.log').read_text()[-16000:])
+                  raise SystemExit(result.returncode)
+          PY
+
+      - name: Build unsigned device IPA
+        run: |
+          set -o pipefail
+          ./package_ios.sh --unsigned 2>&1 | tee build/DerivedData/ios-package.log
+
+      - name: Inspect package and prepare release files
+        id: package
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import plistlib
+          import shutil
+          import subprocess
+          import zipfile
+          from pathlib import Path
+
+          root = Path('build/DerivedData')
+          app = root / 'Archives/TVBox-iOS.xcarchive/Products/Applications/TVBox.app'
+          with (app / 'Info.plist').open('rb') as source:
+              info = plistlib.load(source)
+          assert sorted(info['UIDeviceFamily']) == [1, 2], 'IPA must support both iPhone and iPad'
+          assert info['CFBundleSupportedPlatforms'] == ['iPhoneOS'], 'Device package required'
+          architectures = subprocess.check_output(['lipo', '-archs', str(app / info['CFBundleExecutable'])], text=True).strip()
+          assert architectures == 'arm64', architectures
+          version = info['CFBundleShortVersionString']
+          build = info['CFBundleVersion']
+          name = f'TVBox-iOS-iPadOS-{version}-build{build}-unsigned.ipa'
+          package = root / 'Packages' / name
+          shutil.copyfile(root / 'Packages/TVBox.ipa', package)
+          with zipfile.ZipFile(package) as archive:
+              assert archive.testzip() is None, 'Corrupt ZIP member'
+              assert json.loads(archive.read('Payload/TVBox.app/TVBoxPresets.json')) == [], 'Private configuration must not be published'
+              assert not any(entry.endswith(('.p12', '.p8', '.mobileprovision')) for entry in archive.namelist()), 'Signing material in IPA'
+          digest = hashlib.sha256(package.read_bytes()).hexdigest()
+          checksums = root / 'Packages/SHA256SUMS-iOS.txt'
+          checksums.write_text(f'{digest}  {name}\n')
+          tag = f'ios-v{version}-build{build}'
+          notes = root / 'Packages/iOS-release-notes.md'
+          notes.write_text(f'''iPhone / iPad 通用版本 {version}，build {build}。最低系统 iOS / iPadOS 17。
+
+          - iPad 自适应侧栏、海报网格及播放器/选集双栏，支持窄窗口布局。
+          - 优化移动端播放控件、安全区域、防锁屏及全屏播放衔接。
+          - 修复直播无源页返回入口，调整个人中心和设置正文宽度。
+
+          此 IPA 未使用 Apple 证书签名，不能直接点击安装；请使用支持的侧载工具自行签名。安装包不含接口配置，需自行添加。
+
+          iPhone 和 iPad 的布局及防休眠 XCTest 已通过，Release 真机架构归档和安装包检查已通过。网络媒体、VLC 解码及真机侧载仍需设备验证。
+
+          源码提交：{os.environ['GITHUB_SHA']}
+          SHA-256：`{digest}`
+          ''')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'tag={tag}\nversion={version}\nbuild={build}\nipa={package}\nchecksums={checksums}\nnotes={notes}\n')
+          PY
+
+      - name: Publish IPA prerelease
+        env:
+          RELEASE_TAG: ${{ steps.package.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.package.outputs.version }}
+          RELEASE_BUILD: ${{ steps.package.outputs.build }}
+          IPA_PATH: ${{ steps.package.outputs.ipa }}
+          CHECKSUM_PATH: ${{ steps.package.outputs.checksums }}
+          NOTES_PATH: ${{ steps.package.outputs.notes }}
+        run: |
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --draft --prerelease --latest=false \
+            --title "TVBox iPhone / iPad $RELEASE_VERSION (build $RELEASE_BUILD)" --notes-file "$NOTES_PATH"
+          gh release upload "$RELEASE_TAG" "$IPA_PATH" "$CHECKSUM_PATH" --repo "$GITHUB_REPOSITORY"
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve build and test evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-build-evidence
+          path: |
+            build/DerivedData/*.log
+            build/DerivedData/TestResults
+            build/DerivedData/Packages/*.ipa
+          retention-days: 7
