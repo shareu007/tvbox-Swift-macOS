@@ -111,7 +111,9 @@ jobs:
                       '-only-testing:tvbox-Tests/AdaptiveMediaLayoutTests',
                       '-only-testing:tvbox-Tests/PlaybackSleepPreventerTests', 'CODE_SIGNING_ALLOWED=NO']
               args += ['-only-testing:tvbox-Tests/MobileSpiderGatewayTests',
-                       '-only-testing:tvbox-Tests/SpiderGatewayTests']
+                       '-only-testing:tvbox-Tests/SpiderGatewayTests',
+                       '-only-testing:tvbox-Tests/CloudDriveCredentialFileStoreTests',
+                       '-only-testing:tvbox-Tests/CloudDriveLoginCredentialExtractorTests']
               with Path('build/DerivedData/' + family + '-tests.log').open('w') as log:
                   print(f'Running tests on {device["name"]}', flush=True)
                   process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -206,6 +208,15 @@ jobs:
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Preserve installable package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-ipa-build${{ steps.package.outputs.build }}
+          path: |
+            ${{ steps.package.outputs.ipa }}
+            ${{ steps.package.outputs.checksums }}
+          retention-days: 14
+
       - name: Preserve build and test evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -214,5 +225,4 @@ jobs:
           path: |
             build/DerivedData/*.log
             build/DerivedData/TestResults
-            build/DerivedData/Packages/*.ipa
           retention-days: 7
