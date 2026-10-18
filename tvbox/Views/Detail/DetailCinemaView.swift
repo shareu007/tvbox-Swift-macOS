@@ -133,38 +133,3 @@ struct DetailCinemaActionStyle: ButtonStyle {
         return onArtwork ? .black.opacity(0.3) : .primary.opacity(0.06)
     }
 }
-
-struct DetailCinemaAbout: View {
-    let info: VodInfo
-
-    var body: some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: 16) {
-                if !info.des.stripHTML.isEmpty {
-                    Text(info.des.stripHTML).font(.callout).lineSpacing(5)
-                }
-                credit("导演", value: info.director)
-                credit("演员", value: info.actor)
-            }
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 16)
-        } label: {
-            Text("关于本片").font(.headline).foregroundStyle(.primary)
-                .frame(minHeight: 44)
-        }
-        .tint(.secondary)
-        .padding(.horizontal, 28)
-    }
-
-    @ViewBuilder
-    private func credit(_ title: String, value: String) -> some View {
-        if !value.isEmpty {
-            HStack(alignment: .top, spacing: 14) {
-                Text(title).foregroundStyle(.tertiary).frame(width: 36, alignment: .leading)
-                Text(value).frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .font(.callout)
-        }
-    }
-}

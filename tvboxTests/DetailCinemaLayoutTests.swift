@@ -8,12 +8,12 @@ import XCTest
 final class DetailCinemaLayoutTests: XCTestCase {
     func testRenderWideDetailInBothAppearances() throws {
         for scheme in [ColorScheme.dark, .light] {
-            try render(width: 1100, scheme: scheme)
+            try render(width: 1100, scheme: scheme, count: 34)
         }
     }
 
     func testRenderCompactDetailWithMissingPosterAndLongTitle() throws {
-        try render(width: 390, scheme: .light, missingPoster: true)
+        try render(width: 390, scheme: .light, missingPoster: true, count: 34)
     }
 
     func testRenderPlaybackWithCompactHeader() throws {
@@ -67,9 +67,8 @@ final class DetailCinemaLayoutTests: XCTestCase {
                         Text("线路一 ⌄").font(.subheadline)
                     }
                     EpisodeListView(episodes: episodes, selectedIndex: selectedIndex, onSelect: { _ in },
-                                    layout: .cinema, isPlaying: playing)
+                                    horizontalPadding: 0)
                 }.padding(.horizontal, 28)
-                DetailCinemaAbout(info: info)
             }.padding(.bottom, 24)
         }
         .background(AppTheme.background)

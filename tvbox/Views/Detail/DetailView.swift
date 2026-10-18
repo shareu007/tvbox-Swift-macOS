@@ -87,12 +87,6 @@ struct DetailView: View {
                     if !viewModel.currentEpisodes.isEmpty {
                         episodeSection
                     }
-                
-                    if let info = viewModel.vodInfo,
-                       !info.des.isEmpty || !info.director.isEmpty || !info.actor.isEmpty {
-                        Divider().padding(.horizontal, 28).padding(.vertical, 20)
-                        DetailCinemaAbout(info: info)
-                    }
                 }
                 .padding(.bottom, 40)
             }
@@ -327,8 +321,7 @@ struct DetailView: View {
                     viewModel.selectEpisode(index: index)
                     saveHistoryForCurrentEpisode()
                 },
-                layout: .cinema,
-                isPlaying: viewModel.isPlaying
+                horizontalPadding: 0
             )
         }
         .padding(.horizontal, 28)
