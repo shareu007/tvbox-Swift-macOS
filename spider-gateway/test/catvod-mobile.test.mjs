@@ -54,7 +54,7 @@ test('provider workers cannot read the application directory or use the native c
   const { manager } = await setup(t);
   const value = await manager.invoke(artifact, site, 'search', { keyword: 'permissions' });
   assert.deepEqual(JSON.parse(value.list[0].vod_name), {
-    fileDenied: true, fdDenied: true, bindingDenied: true, bridgeDenied: true, workerDenied: true, addonDenied: true
+    fileDenied: true, fdDenied: true, esmDenied: true, bindingDenied: true, bridgeDenied: true, workerDenied: true, addonDenied: true
   });
 });
 

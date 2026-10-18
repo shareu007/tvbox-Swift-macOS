@@ -94,7 +94,7 @@ final class MobileSpiderGatewayTests: XCTestCase {
         let permissions = try await service.search(source: source, keyword: "permissions")
         let permissionData = Data(try XCTUnwrap(permissions.first?.name).utf8)
         let checks = try JSONDecoder().decode([String: Bool].self, from: permissionData)
-        XCTAssertEqual(checks.count, 6)
+        XCTAssertEqual(checks.count, 7)
         XCTAssertTrue(checks.values.allSatisfy { $0 })
 
         // The engine remains in the app; clearing UI settings must not require

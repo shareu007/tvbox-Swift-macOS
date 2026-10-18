@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 
 // Native iOS and Node share one OS process. Node's path permissions explicitly
 // exempt existing descriptors, so providers must not read/close native database
@@ -61,4 +62,7 @@ export function restrictMobileFileDescriptors() {
   for (const key of ['kill', 'abort', 'reallyExit', '_debugProcess']) {
     Object.defineProperty(process, key, { value: denied, configurable: false, writable: false });
   }
+  // CatVod code can dynamically import a builtin. Its named ESM exports must
+  // use the same guarded functions as require('fs') and the default export.
+  syncBuiltinESMExports();
 }
