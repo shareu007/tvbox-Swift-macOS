@@ -80,11 +80,6 @@ struct HomeView: View {
     
     private var headerBar: some View {
         HStack(spacing: 12) {
-            Text("TVBOX")
-                .font(.system(size: 23, weight: .black))
-                .tracking(-0.8)
-                .foregroundStyle(.orange)
-                .accessibilityLabel("TVBox 首页")
             Spacer(minLength: 16)
             // 源切换按钮
             Menu {

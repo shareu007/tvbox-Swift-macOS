@@ -25,7 +25,6 @@ final class HomeCinemaLayoutTests: XCTestCase {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     HStack {
-                        Text("TVBOX").font(.system(size: 23, weight: .black)).foregroundStyle(.orange)
                         Spacer()
                         Text("精选片库").font(.caption).foregroundStyle(.secondary)
                     }.padding(.horizontal, 28).padding(.top, 16)
