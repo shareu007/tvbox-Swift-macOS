@@ -24,15 +24,27 @@ final class HomeCinemaLayoutTests: XCTestCase {
         let content = NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    HStack {
-                        Spacer()
-                        Text("精选片库").font(.caption).foregroundStyle(.secondary)
-                    }.padding(.horizontal, 28).padding(.top, 16)
-                    HStack(spacing: 8) {
-                        ForEach(["推荐", "电影", "电视剧", "综艺"], id: \.self) { title in
-                            HomeCinemaCategoryLabel(title: title, isSelected: title == "推荐")
+                    HStack(spacing: 12) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(["推荐", "电影", "电视剧", "综艺"], id: \.self) { title in
+                                    HomeCinemaCategoryLabel(title: title, isSelected: title == "推荐")
+                                }
+                            }.padding(.horizontal, 12)
                         }
-                    }.padding(.horizontal, 12)
+                        Menu {
+                            Button("精选片库") {}
+                        } label: {
+                            Label("精选片库", systemImage: "play.tv.fill")
+                                .font(.system(size: 12, weight: .medium))
+                                .frame(minHeight: 44)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .frame(height: 44)
+                    .padding(.trailing, 24)
+                    .padding(.vertical, 4)
                     HomeCinemaShelf(title: "为你精选", videos: videos)
                     HomeCinemaShelf(title: "电影推荐", videos: Array(videos.reversed()), more: {})
                 }

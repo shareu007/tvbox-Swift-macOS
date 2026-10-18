@@ -21,8 +21,17 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // 顶部栏
-                headerBar
+                HStack(spacing: 12) {
+                    if !viewModel.sorts.isEmpty {
+                        categoryTabBar
+                    } else {
+                        Spacer(minLength: 0)
+                    }
+                    sourceSelector
+                }
+                .frame(height: 44)
+                .padding(.trailing, 24)
+                .padding(.vertical, 4)
 
                 if viewModel.isLoadingHome || viewModel.homeLoadMessage != nil {
                     HStack {
@@ -50,10 +59,6 @@ struct HomeView: View {
                     .padding(.horizontal, 16).padding(.vertical, 6)
                 }
 
-                // 分类标签栏
-                if !viewModel.sorts.isEmpty {
-                    categoryTabBar
-                }
                 if let group = viewModel.selectedCategoryGroup, group.categories.count > 1 {
                     HomeSubcategoryPicker(group: group, selectedID: viewModel.selectedSort?.id) { category in
                         viewModel.selectSort(category)
@@ -76,99 +81,76 @@ struct HomeView: View {
         }
     }
     
-    // MARK: - 顶部栏（源选择器）
+    // MARK: - 来源选择
     
-    private var headerBar: some View {
-        HStack(spacing: 12) {
-            Spacer(minLength: 16)
-            // 源切换按钮
-            Menu {
-                ForEach(ApiConfig.shared.sourceBeanList.filter { $0.isHomeEligible }) { source in
-                    Button {
-                        ApiConfig.shared.setHomeSource(source)
-                        Task { await viewModel.refresh() }
-                    } label: {
-                        HStack {
-                            Text(source.name)
-                            if source.key == ApiConfig.shared.homeSourceBean?.key {
-                                Image(systemName: "checkmark")
-                            }
+    private var sourceSelector: some View {
+        Menu {
+            ForEach(ApiConfig.shared.sourceBeanList.filter { $0.isHomeEligible }) { source in
+                Button {
+                    ApiConfig.shared.setHomeSource(source)
+                    Task { await viewModel.refresh() }
+                } label: {
+                    HStack {
+                        Text(source.name)
+                        if source.key == ApiConfig.shared.homeSourceBean?.key {
+                            Image(systemName: "checkmark")
                         }
                     }
                 }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "play.tv.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.orange)
-                    Text(ApiConfig.shared.homeSourceBean?.name ?? "TVBox")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.secondary)
-                }
             }
-            .menuStyle(.borderlessButton)
-            .frame(maxWidth: 260, alignment: .trailing)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "play.tv.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.orange)
+                Text(ApiConfig.shared.homeSourceBean?.name ?? "TVBox")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 160, alignment: .leading)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .frame(minHeight: 44)
         }
-        .padding(.horizontal, 28)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
+        .menuStyle(.borderlessButton)
+        .fixedSize(horizontal: true, vertical: false)
     }
     
     // MARK: - 分类标签栏
     
     private var categoryTabBar: some View {
-        HStack(spacing: 4) {
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(viewModel.categoryGroups) { group in
-                            Button {
-                                viewModel.selectCategoryGroup(group)
-                            } label: {
-                                HomeCinemaCategoryLabel(title: group.title, isSelected: viewModel.selectedCategoryGroup?.id == group.id)
-                            }
-                            .buttonStyle(.plain)
-                            .id(group.id)
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(viewModel.categoryGroups) { group in
+                        Button {
+                            viewModel.selectCategoryGroup(group)
+                        } label: {
+                            HomeCinemaCategoryLabel(title: group.title, isSelected: viewModel.selectedCategoryGroup?.id == group.id)
                         }
-                    }
-                    .padding(.horizontal, 12)
-                }
-                .onAppear {
-                    syncCategoryScrollAnchorIfNeeded()
-                    scrollCategoryBar(to: categoryScrollAnchorId, proxy: proxy, animated: false)
-                }
-                .onChange(of: viewModel.categoryGroups.map(\.id)) { oldValue, newValue in
-                    syncCategoryScrollAnchorIfNeeded()
-                    scrollCategoryBar(to: categoryScrollAnchorId, proxy: proxy, animated: false)
-                }
-                .onChange(of: viewModel.selectedCategoryGroup?.id) { oldId, newId in
-                    guard let newId else { return }
-                    categoryScrollAnchorId = newId
-                    scrollCategoryBar(to: newId, proxy: proxy)
-                }
-            }
-            Menu {
-                ForEach(viewModel.categoryGroups) { group in
-                    Button { viewModel.selectCategoryGroup(group) } label: {
-                        if viewModel.selectedCategoryGroup?.id == group.id {
-                            Label(group.title, systemImage: "checkmark")
-                        } else { Text(group.title) }
+                        .buttonStyle(.plain)
+                        .id(group.id)
                     }
                 }
-            } label: {
-                Image(systemName: "square.grid.2x2")
-                    .foregroundStyle(.orange)
-                    .frame(width: 44, height: 44)
+                .padding(.horizontal, 12)
             }
-            .menuStyle(.borderlessButton)
-            .accessibilityLabel("全部分类")
-            .padding(.trailing, 12)
+            .onAppear {
+                syncCategoryScrollAnchorIfNeeded()
+                scrollCategoryBar(to: categoryScrollAnchorId, proxy: proxy, animated: false)
+            }
+            .onChange(of: viewModel.categoryGroups.map(\.id)) { oldValue, newValue in
+                syncCategoryScrollAnchorIfNeeded()
+                scrollCategoryBar(to: categoryScrollAnchorId, proxy: proxy, animated: false)
+            }
+            .onChange(of: viewModel.selectedCategoryGroup?.id) { oldId, newId in
+                guard let newId else { return }
+                categoryScrollAnchorId = newId
+                scrollCategoryBar(to: newId, proxy: proxy)
+            }
         }
-        .padding(.bottom, 4)
     }
 
     private func syncCategoryScrollAnchorIfNeeded() {
