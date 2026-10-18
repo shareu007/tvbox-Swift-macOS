@@ -62,10 +62,11 @@ export function createGateway(config, dependencies = {}) {
   const catVod = dependencies.catVod || new CatVodManager({ ...config, cloudConfig: {} });
   const trustedFetch = dependencies.fetchValue || fetch;
   const cloudCredentials = {
-    quarkCookie: String(config.cloudConfig?.quarkCookie || "")
+    get quarkCookie() { return String(config.cloudConfig?.quarkCookie || ""); }
   };
   const server = http.createServer(async (request, response) => {
     try {
+      await dependencies.beforeRequest?.();
       const url = new URL(request.url || "/", "http://gateway.local");
       if (request.method === "GET" && url.pathname === "/health") {
         sendJSON(response, 200, {

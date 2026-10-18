@@ -22,8 +22,11 @@
 | 能力 | macOS | iPhone / iPad |
 |---|---:|---:|
 | CMS `type=0/1/4` | ✅ | ✅ |
-| CatVod Node 动态源 | 内置 | 需外部 HTTPS Gateway |
+| CatVod Node 动态源 | 内置 | 内置，独立使用 |
 | Java/DEX `csp_*` JAR | 需兼容 Worker | 需外部 Gateway |
+
+iPhone / iPad 的 CatVod 独立运行方式与验证见
+[手机端脚本引擎说明](docs/ios-standalone-spider.md)。
 | 夸克账号与原生网盘解析 | ✅ | 暂未内置 |
 
 App 不执行 Java/DEX，也不保证兼容所有第三方规则、网页嗅探、DRM 或解析器。

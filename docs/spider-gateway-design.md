@@ -1,5 +1,9 @@
 # Type 3 Spider Gateway 设计
 
+> iOS build 28 起，CatVod 改为 App 内独立运行。iOS 的执行与权限边界以
+> [iPhone / iPad 独立运行 CatVod](ios-standalone-spider.md) 为准；下文的
+> macOS 子进程和外部 Android Worker 架构继续适用。
+
 ## 1. 决策
 
 TVBox Swift 通过 Spider Gateway 支持两类 `type=3` 源：`csp_*` JAR 由可选 Android Worker 执行，CatVod Node bundle 的 `/spider/...` 接口由 macOS 本机的受限 Node 子进程执行。App 进程不下载或执行 JAR/DEX 或远程脚本。

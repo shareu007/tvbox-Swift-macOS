@@ -161,12 +161,11 @@ export function createSiteRequestQueue() {
   };
 }
 
-async function main() {
-  const bundlePath = process.argv[2];
+export async function runCatVod(bundlePath, options = {}) {
   if (!bundlePath) throw new Error("Bundle path is required");
   // fd 3 is a dedicated control channel. Third-party bundles may write logs to
   // stdout even after console is replaced, so stdout cannot carry protocol data.
-  const writeLine = (value) => writeSync(3, value);
+  const writeLine = options.writeLine || ((value) => writeSync(3, value));
   const log = (...values) => process.stderr.write(`${values.map(String).join(" ").slice(0, 2048)}\n`);
   console.log = log;
   console.info = log;
@@ -177,7 +176,8 @@ async function main() {
 
   const source = await readFile(bundlePath, "utf8");
   const patched = patchBundle(source);
-  const localRequire = createRequire(pathToFileURL(bundlePath));
+  const baseRequire = createRequire(pathToFileURL(bundlePath));
+  const localRequire = options.wrapRequire ? options.wrapRequire(baseRequire) : baseRequire;
   new Function("require", "module", "exports", patched)(localRequire, { exports: {} }, {});
   if (!globalThis.__catvodExports?.start) throw new Error("CatVod start export is unavailable");
   // Account credentials remain in the trusted Gateway parent process. Remote
@@ -229,7 +229,7 @@ async function main() {
       : result;
   }
 
-  const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+  const lines = readline.createInterface({ input: options.input || process.stdin, crlfDelay: Infinity });
   const active = new Set();
   const enqueueSiteRequest = createSiteRequestQueue();
   const maximumConcurrentRequests = 6;
@@ -255,12 +255,11 @@ async function main() {
   await globalThis.__catvodExports.stop?.();
 }
 
-startParentWatchdog(async () => {
-  await globalThis.__catvodExports?.stop?.();
-});
-
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
-  main().catch((error) => {
+  startParentWatchdog(async () => {
+    await globalThis.__catvodExports?.stop?.();
+  });
+  runCatVod(process.argv[2]).catch((error) => {
     process.stderr.write(`${error.stack || error}\n`);
     process.exitCode = 1;
   });

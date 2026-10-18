@@ -89,9 +89,9 @@ struct SettingsView: View {
                         Divider().background(Color.primary.opacity(0.1))
                         SettingsRow(
                             icon: "shippingbox",
-                            title: "Spider Gateway",
+                            title: "外部 Spider Gateway（可选）",
                             value: viewModel.spiderGatewayUrl.isEmpty
-                                ? "未配置"
+                                ? "CatVod 使用手机内置引擎"
                                 : SensitiveURLRedactor.redact(viewModel.spiderGatewayUrl)
                         ) {
                             beginEditingApi(.spiderGateway)
@@ -941,7 +941,7 @@ struct SettingsView: View {
 #if os(macOS)
         return source.api.hasPrefix("csp_") ? "JAR 暂不支持" : "运行组件不可用"
 #else
-        return SpiderGatewaySettings.isConfigured ? "Spider 配置不完整" : "需要 Gateway"
+        return source.api.hasPrefix("csp_") ? "Android JAR 需要兼容运行环境" : "Spider 配置不完整"
 #endif
     }
 }

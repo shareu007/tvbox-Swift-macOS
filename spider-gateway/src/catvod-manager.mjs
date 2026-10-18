@@ -148,6 +148,7 @@ export class CatVodManager {
     this.closed = false;
     this.responseCaches = new WeakMap();
     this.responseCacheOptions = options.responseCacheOptions;
+    this.createProcess = options.createProcess;
     this.sweeper = setInterval(() => this.sweep(), Math.min(this.idleMs, 5_000));
     this.sweeper.unref();
   }
@@ -202,7 +203,10 @@ export class CatVodManager {
     }
     // Node 26 also gates network access. CatVod providers inherently need
     // outbound HTTP, while older supported Node releases do not expose this flag.
-    const child = spawn(process.execPath, [
+    const child = this.createProcess
+      ? this.createProcess({ bundlePath: artifact.path, runtimeDir, runnerPath,
+          maxLineBytes: this.maxLineBytes })
+      : spawn(process.execPath, [
       "--max-old-space-size=256",
       ...catVodPermissionArguments(),
       // The runner imports built-in source modules from the same bundled directory.

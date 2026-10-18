@@ -15,6 +15,8 @@ configFiles:
   Release: Config/Shared.xcconfig
 
 packages:
+  MobileNodeRuntime:
+    path: Vendor/MobileNodeRuntime
   MPVKit:
     url: https://github.com/mpvkit/MPVKit.git
     exactVersion: 1.0.0
@@ -28,6 +30,8 @@ targets:
     platform: iOS
     deploymentTarget: "17.0"
     dependencies:
+      - package: MobileNodeRuntime
+        product: TVBoxNodeRuntime
       - package: VLCKitSPM
         product: VLCKitSPM
     sources:
@@ -35,6 +39,9 @@ targets:
         excludes:
           - Info.plist
     preBuildScripts:
+      - name: Prepare Mobile Spider Runtime
+        script: '"${SRCROOT}/scripts/prepare_mobile_gateway.sh" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"'
+        basedOnDependencyAnalysis: false
       - name: Prepare Local Configuration
         script: '"${SRCROOT}/scripts/prepare_local_config.sh" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"'
         basedOnDependencyAnalysis: false
@@ -48,7 +55,7 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         GENERATE_INFOPLIST_FILE: YES
-        CURRENT_PROJECT_VERSION: "27"
+        CURRENT_PROJECT_VERSION: "28"
         MARKETING_VERSION: "1.2.0"
         PRODUCT_NAME: TVBox
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -71,6 +78,8 @@ targets:
     sources:
       - path: tvbox-Tests
       - path: tvboxTests
+      - path: spider-gateway/fixtures/fake-catvod-mobile.js
+        buildPhase: resources
     dependencies:
       - target: tvbox
     settings:
@@ -116,7 +125,7 @@ targets:
         HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Vendor/MPVCoreAudio $(SRCROOT)/Vendor/MPVMoltenVK $(SRCROOT)/Vendor/MPVMoltenVK/include $(SRCROOT)/Vendor/MPVCoreAudio/options"
         INFOPLIST_FILE: tvbox/Info.plist
         GENERATE_INFOPLIST_FILE: YES
-        CURRENT_PROJECT_VERSION: "27"
+        CURRENT_PROJECT_VERSION: "28"
         MARKETING_VERSION: "1.2.0"
         PRODUCT_NAME: TVBox
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

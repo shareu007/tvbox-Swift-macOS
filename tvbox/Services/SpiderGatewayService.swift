@@ -284,8 +284,22 @@ final class SpiderGatewayService {
             throw SpiderGatewayError.unsupportedAPI(source.api)
         }
         guard let jar = source.jar, !jar.isEmpty else { throw SpiderGatewayError.missingJar }
+#if os(iOS)
+        let connection: (baseURL: String, token: String)
+        if source.api.hasPrefix("csp_") {
+            guard !SpiderGatewaySettings.savedBaseURL.isEmpty else {
+                throw SpiderGatewayError.androidJarOnMobile
+            }
+            connection = (SpiderGatewaySettings.savedBaseURL, SpiderGatewaySettings.savedToken)
+        } else {
+            try await prepareGatewayIfNeeded(bundleURL: jar)
+            connection = SpiderGatewaySettings.connection
+        }
+#else
         try await prepareGatewayIfNeeded(bundleURL: jar)
         guard SpiderGatewaySettings.isConfigured else { throw SpiderGatewayError.notConfigured }
+        let connection = SpiderGatewaySettings.connection
+#endif
 
         let request = SpiderInvokeRequest(
             version: 1,
@@ -299,7 +313,6 @@ final class SpiderGatewayService {
             ),
             arguments: .dict(arguments)
         )
-        let connection = SpiderGatewaySettings.connection
         let endpoint = connection.baseURL + "/v1/spider/invoke"
         let headers = connection.token.isEmpty
             ? nil
@@ -339,6 +352,11 @@ final class SpiderGatewayService {
             // 开发或迁移场景仍可使用此前保存的外部 Gateway。
             guard !SpiderGatewaySettings.savedBaseURL.isEmpty else { throw error }
         }
+#elseif os(iOS)
+        _ = try await MobileSpiderGateway.shared.ensureStarted(
+            allowedBundleURL: bundleURL,
+            replacingAllowlist: replacingBundleAllowlist
+        )
 #endif
     }
 
@@ -405,6 +423,7 @@ private struct CatVodCatalogRequest: Encodable {
 
 enum SpiderGatewayError: LocalizedError {
     case notConfigured
+    case androidJarOnMobile
     case invalidGatewayURL
     case insecureGatewayURL
     case missingJar
@@ -418,6 +437,7 @@ enum SpiderGatewayError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured: return "请先在设置中配置 Spider Gateway"
+        case .androidJarOnMobile: return "该接口使用 Android 专用 JAR，手机内置引擎支持 CatVod .js / .js.md5 接口"
         case .invalidGatewayURL: return "Spider Gateway 地址必须是 HTTP 或 HTTPS URL"
         case .insecureGatewayURL: return "远程 Spider Gateway 必须使用 HTTPS；HTTP 仅允许本机回环地址"
         case .missingJar: return "该 Spider 源没有配置运行包地址"

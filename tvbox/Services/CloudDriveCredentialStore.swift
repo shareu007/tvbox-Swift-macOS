@@ -1,4 +1,3 @@
-#if os(macOS)
 import Foundation
 
 /// 网盘凭据保存在用户 Application Support 私有目录，不进入项目配置或系统钥匙串。
@@ -35,7 +34,7 @@ enum CloudDriveCredentialStore {
         }
     }
 
-    /// 仅传给 App 内置子进程，不进入用户的影视接口配置。
+    /// 仅传给 App 内置信任的执行组件，不进入用户的影视接口配置。
     static var gatewayValues: [String: String] {
         let storedValues = fileStore.values()
         return [
@@ -110,4 +109,3 @@ enum CloudDriveCredentialError: LocalizedError {
         }
     }
 }
-#endif

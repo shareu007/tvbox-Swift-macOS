@@ -37,6 +37,11 @@ jobs:
           xcodegen generate
           xcodebuild -version
 
+      - name: Test Spider runner
+        run: |
+          set -o pipefail
+          node --test spider-gateway/test/*.test.mjs 2>&1 | tee build/DerivedData/spider-tests.log
+
       - name: Find verified tests for unchanged application sources
         id: verified
         env:
@@ -57,7 +62,9 @@ jobs:
           current_id = os.environ['GITHUB_RUN_ID']
           workflow = Path('.github/workflows/ios-release.yml').read_text()
           inputs = ['tvbox', 'tvboxTests', 'tvbox-Tests', 'tvbox.xcodeproj', 'project.yml',
-                    'Config/Templates', 'Config/Shared.xcconfig', 'scripts/prepare_local_config.sh']
+                    'Config/Templates', 'Config/Shared.xcconfig', 'scripts/prepare_local_config.sh',
+                    'Vendor/MobileNodeRuntime', 'spider-gateway/src', 'spider-gateway/fixtures',
+                    'scripts/prepare_mobile_gateway.sh']
           verified_id = ''
           for run in api(f'repos/{repo}/actions/runs?branch={branch}&per_page=10')['workflow_runs']:
               if str(run['id']) == current_id:
@@ -70,7 +77,7 @@ jobs:
               if re.findall(r"['\"](-only-testing:[A-Za-z0-9/_-]+)['\"]", previous) != re.findall(r"['\"](-only-testing:[A-Za-z0-9/_-]+)['\"]", workflow):
                   continue
               jobs = api(f'repos/{repo}/actions/runs/{run["id"]}/jobs')['jobs']
-              if any(step['name'] == 'Test iPhone and iPad layouts' and step['conclusion'] == 'success'
+              if any(step['name'] == 'Test iPhone and iPad' and step['conclusion'] == 'success'
                      for job in jobs for step in job.get('steps', [])):
                   verified_id = str(run['id'])
                   print(f'Reusing successful iPhone and iPad tests: {run["html_url"]}')
@@ -79,7 +86,7 @@ jobs:
               output.write(f'run={verified_id}\n')
           PY
 
-      - name: Test iPhone and iPad layouts
+      - name: Test iPhone and iPad
         if: steps.verified.outputs.run == ''
         run: |
           python3 - <<'PY'
@@ -97,6 +104,8 @@ jobs:
                       '-resultBundlePath', 'build/DerivedData/TestResults/' + family + '.xcresult',
                       '-only-testing:tvbox-Tests/AdaptiveMediaLayoutTests',
                       '-only-testing:tvbox-Tests/PlaybackSleepPreventerTests', 'CODE_SIGNING_ALLOWED=NO']
+              args += ['-only-testing:tvbox-Tests/MobileSpiderGatewayTests',
+                       '-only-testing:tvbox-Tests/SpiderGatewayTests']
               with Path('build/DerivedData/' + family + '-tests.log').open('w') as log:
                   print(f'Running tests on {device["name"]}', flush=True)
                   process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -136,6 +145,8 @@ jobs:
           assert info['CFBundleSupportedPlatforms'] == ['iPhoneOS'], 'Device package required'
           architectures = subprocess.check_output(['lipo', '-archs', str(app / info['CFBundleExecutable'])], text=True).strip()
           assert architectures == 'arm64', architectures
+          assert (app / 'Frameworks/NodeMobile.framework/NodeMobile').is_file(), 'Missing standalone script engine'
+          assert (app / 'SpiderGateway/mobile-entry.mjs').is_file(), 'Missing mobile script runner'
           version = info['CFBundleShortVersionString']
           build = info['CFBundleVersion']
           name = f'TVBox-iOS-iPadOS-{version}-build{build}-unsigned.ipa'
@@ -152,13 +163,13 @@ jobs:
           notes = root / 'Packages/iOS-release-notes.md'
           notes.write_text(f'''iPhone / iPad 通用版本 {version}，build {build}。最低系统 iOS / iPadOS 17。
 
-          - iPad 自适应侧栏、海报网格及播放器/选集双栏，支持窄窗口布局。
-          - 优化移动端播放控件、安全区域、防锁屏及全屏播放衔接。
-          - 修复直播无源页返回入口，调整个人中心和设置正文宽度。
+          - 修复 iPhone 添加 CatVod 接口时提示配置 Spider Gateway 的问题。
+          - 内置手机端脚本引擎，CatVod `.js / .js.md5` 独立运行，无需电脑或外部网关。
+          - 支持目录、首页、分类、详情、搜索及播放地址解析；保留 iPhone / iPad 自适应布局。
 
           此 IPA 未使用 Apple 证书签名，不能直接点击安装；请使用支持的侧载工具自行签名。安装包不含接口配置，需自行添加。
 
-          iPhone 和 iPad 的布局及防休眠 XCTest 已通过，Release 真机架构归档和安装包检查已通过。网络媒体、VLC 解码及真机侧载仍需设备验证。
+          iPhone 和 iPad 的首次导入、脚本执行链路、布局及防休眠 XCTest 已通过，Release 真机架构归档和安装包检查已通过。Android Java/DEX JAR 仍需要兼容运行环境。网络媒体和真机侧载仍需设备验证。
 
           源码提交：{os.environ['GITHUB_SHA']}
           测试记录：https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['TEST_SOURCE_RUN']}

@@ -207,11 +207,11 @@ struct SourceBean: Codable, Identifiable, Hashable {
         )
     }
     
-    /// 是否在当前 Swift 构建中可用。macOS 的 Node type=3 由内置运行组件提供。
+    /// Node type=3 在 macOS、iPhone 和 iPad 均由内置运行组件提供。
     var isSupportedInSwift: Bool {
         if type == 0 || type == 1 || type == 4 { return true }
         guard isSpiderGatewayCompatible else { return false }
-#if os(macOS)
+#if os(macOS) || os(iOS)
         if api.hasPrefix("/spider/") { return true }
         return !SpiderGatewaySettings.savedBaseURL.isEmpty
 #else
