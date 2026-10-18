@@ -34,7 +34,6 @@ final class HomeCinemaLayoutTests: XCTestCase {
                             HomeCinemaCategoryLabel(title: title, isSelected: title == "推荐")
                         }
                     }.padding(.horizontal, 12)
-                    HomeCinemaHero(videos: videos)
                     HomeCinemaShelf(title: "为你精选", videos: videos)
                     HomeCinemaShelf(title: "电影推荐", videos: Array(videos.reversed()), more: {})
                 }

@@ -335,9 +335,6 @@ struct HomeView: View {
     private var recommendationContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 28) {
-                if !viewModel.displayedVideos.isEmpty {
-                    HomeCinemaHero(videos: viewModel.displayedVideos)
-                }
                 if !viewModel.filteredHomeVideos.isEmpty {
                     HomeCinemaShelf(title: "为你精选", videos: viewModel.filteredHomeVideos)
                 }
