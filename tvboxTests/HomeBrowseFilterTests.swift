@@ -148,9 +148,10 @@ final class HomeBrowseFilterTests: XCTestCase {
             return (0..<50).map { Movie.Video(id: "\($0)") }
         }
         await model.refresh()
-        XCTAssertEqual(calls, 4)
+        XCTAssertEqual(calls, 7, "4 个主分区各 1 次 + 其他分区轮转取样 3 个分类各 1 次")
         XCTAssertLessThanOrEqual(maximum, 3)
         XCTAssertTrue(model.recommendationSections.allSatisfy { $0.videos.count == 24 })
+        XCTAssertEqual(model.recommendationSections.last?.id, HomeViewModel.othersSectionID)
     }
 
     func testPartialPageFailurePreservesFirstPageAndRepeatedPageIsDeduplicated() async {
@@ -231,9 +232,30 @@ final class HomeBrowseFilterTests: XCTestCase {
             [Movie.Video(id: sort.id)]
         }
         await model.refresh()
-        XCTAssertEqual(model.recommendationSections.map(\.title), ["电影推荐", "电视剧推荐", "动漫推荐", "综艺推荐"])
+        XCTAssertEqual(model.recommendationSections.map(\.title), ["电影推荐", "电视剧推荐", "动漫推荐", "综艺推荐", "其他推荐"])
         XCTAssertEqual(model.recommendationSections.first?.videos.first?.id, "动作片")
         XCTAssertTrue(model.recommendationSections.first?.subtitle.contains("动作片") == true)
+        XCTAssertEqual(model.recommendationSections.last?.contributingSorts.map(\.name), ["欧美剧"])
+        XCTAssertEqual(model.recommendationSections.last?.videos.map(\.id), ["欧美剧"])
+    }
+
+    func testLeftoverCategoriesAggregateIntoOthersSectionAndMoreOpensFirstCategory() async throws {
+        let source = SourceBean(key: "test", api: "https://example.com", type: 1)
+        let categories = ["动作片", "喜剧片", "爱情片", "国产剧", "综艺", "纪录片", "短剧"].map {
+            MovieSort.SortData(id: $0, name: $0)
+        }
+        let model = HomeViewModel(currentSource: { source }, sortLoader: { _ in (categories, []) }) { _, sort, _, _ in
+            [Movie.Video(id: "\(sort.id)-v")]
+        }
+        await model.refresh()
+        // 混合电影分区吞掉的重复叶子不再挤占名额，纪录片/短剧进入"其他"分区。
+        XCTAssertEqual(model.recommendationSections.map(\.title), ["电影推荐", "电视剧推荐", "综艺推荐", "其他推荐"])
+        let others = try XCTUnwrap(model.recommendationSections.last)
+        XCTAssertEqual(others.id, HomeViewModel.othersSectionID)
+        XCTAssertEqual(others.contributingSorts.map(\.name), ["纪录片", "短剧"])
+        XCTAssertEqual(Set(others.videos.map(\.id)), ["纪录片-v", "短剧-v"])
+        await model.openRecommendation(others)?.value
+        XCTAssertEqual(model.selectedSort?.id, "纪录片", "其他分区的\"更多\"回退到第一个真实分类")
     }
 
     func testHomeYearAndCountryMapDeclaredValuesAndMoreRetainsBothFilters() async throws {

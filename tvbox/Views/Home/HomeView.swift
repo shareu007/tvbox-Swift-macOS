@@ -331,22 +331,6 @@ struct HomeView: View {
     private var recommendationContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Label("发现好故事", systemImage: "sparkles")
-                            .font(.title2.bold())
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        Button { Task { await viewModel.refresh() } } label: {
-                            Label("刷新推荐", systemImage: "arrow.clockwise")
-                                .font(.caption)
-                                .frame(minHeight: 44)
-                        }
-                        .disabled(viewModel.isLoading || viewModel.isLoadingRecommendations)
-                    }
-                }
-                .padding(.horizontal, 20)
-
                 if !viewModel.filteredHomeVideos.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("来源精选", systemImage: "star.fill")

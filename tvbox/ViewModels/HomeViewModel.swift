@@ -10,7 +10,7 @@ struct HomeRecommendationSection: Identifiable, Codable {
     var isLoading = true
     var errorMessage: String?
     var id: String { sort.id }
-    var isMixed: Bool { contributingSorts.count > 1 }
+    var isMixed: Bool { !contributingSorts.isEmpty }
     var isPopular: Bool {
         guard !isMixed else { return false }
         let popular = HomeViewModel.popularFilters(for: sort)
@@ -242,7 +242,7 @@ class HomeViewModel: ObservableObject {
                 let videos = HomeBrowseFacet.matching(preview.videos, selections: localRecommendationFilters(for: sort))
                 samples.append(Self.uniqueVideos(videos))
             } catch {
-                section.errorMessage = "部分电影分类未能加载，可刷新重试"
+                section.errorMessage = "部分分类未能加载，可刷新重试"
             }
         }
         // Round-robin makes every populated category visible before taking more from one.
@@ -379,6 +379,9 @@ class HomeViewModel: ObservableObject {
         Array(orderedRecommendationCategories(from: sorts).prefix(4))
     }
 
+    /// 主分区未覆盖的剩余分类聚合为"其他"混合推荐时使用的合成分类 ID。
+    static let othersSectionID = "__tvbox_home_others__"
+
     private static func orderedRecommendationCategories(from sorts: [MovieSort.SortData]) -> [MovieSort.SortData] {
         var seen = Set<String>()
         let categories = sorts.filter { !$0.isRecommendation && seen.insert($0.id).inserted }
@@ -403,7 +406,7 @@ class HomeViewModel: ObservableObject {
         let movieLeaves = sorts.filter { Self.recommendationFamilyName(for: $0.name) == "电影" }
         let hasMovieRoot = movieLeaves.contains { ["电影", "电影片", "電影", "影片"].contains($0.name) }
         var mixedMoviePlanned = false
-        let plans = Self.recommendationCategories(from: sorts).compactMap { sort -> HomeRecommendationSection? in
+        var plans = Self.recommendationCategories(from: sorts).compactMap { sort -> HomeRecommendationSection? in
             var section = HomeRecommendationSection(sort: sort, filters: recommendationSourceFilters(for: sort))
             if !hasMovieRoot, movieLeaves.count > 1, Self.recommendationFamilyName(for: sort.name) == "电影" {
                 guard !mixedMoviePlanned else { return nil }
@@ -411,6 +414,17 @@ class HomeViewModel: ObservableObject {
                 section.contributingSorts = Array(movieLeaves.prefix(3))
             }
             return section
+        }
+        // 主分区未覆盖的分类（纪录片、短剧、解说等）聚合为"其他"混合推荐，轮转取样保证每个分类都露出。
+        let usedIDs = Set(plans.flatMap { $0.isMixed ? $0.contributingSorts.map(\.id) : [$0.sort.id] })
+        var leftover = Self.orderedRecommendationCategories(from: sorts).filter { !usedIDs.contains($0.id) }
+        if mixedMoviePlanned {
+            leftover.removeAll { Self.recommendationFamilyName(for: $0.name) == "电影" }
+        }
+        if !leftover.isEmpty {
+            var others = HomeRecommendationSection(sort: .init(id: Self.othersSectionID, name: "其他"), filters: [:])
+            others.contributingSorts = Array(leftover.prefix(3))
+            plans.append(others)
         }
         let previousSections = recommendationSections
         recommendationSections = plans.map { plan in
@@ -510,7 +524,9 @@ class HomeViewModel: ObservableObject {
 
     @discardableResult
     func openRecommendation(_ section: HomeRecommendationSection) -> Task<Void, Never>? {
-        guard let sort = sorts.first(where: { $0.id == section.sort.id }) else { return nil }
+        // "其他"分区使用合成分类 ID；"更多"回退到第一个真实贡献分类。
+        guard let sort = sorts.first(where: { $0.id == section.sort.id })
+            ?? sorts.first(where: { $0.id == section.contributingSorts.first?.id }) else { return nil }
         selectedSort = sort
         selectedFilters = section.filters
         for (key, value) in localRecommendationFilters(for: sort) {

@@ -79,7 +79,6 @@ final class BrowseVisualSnapshotTests: XCTestCase {
             let popular = HomeRecommendationSection(sort: movie, filters: ["by": "hits"], videos: videos, isLoading: false)
             let unavailable = HomeRecommendationSection(sort: .init(id: "movie", name: "电影"), filters: [:], isLoading: false, errorMessage: "暂时无法加载，请重试或切换来源")
             let content = VStack(alignment: .leading, spacing: 24) {
-                Text("发现好故事").font(.title2.bold()).foregroundStyle(.white).padding(.horizontal, 20)
                 HomeBrowseFilterBar(filters: [
                     .init(key: "year", name: "年份", values: [.init(n: "2024", v: "2024")]),
                     .init(key: "area", name: "国家/地区", values: [.init(n: "中国大陆", v: "中国大陆")])
