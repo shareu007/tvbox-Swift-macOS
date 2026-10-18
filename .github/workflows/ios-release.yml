@@ -22,10 +22,10 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
       TVBOX_INCLUDE_LOCAL_CONFIG: '0'
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Prepare project
@@ -36,7 +36,49 @@ jobs:
           xcodegen generate
           xcodebuild -version
 
+      - name: Find verified tests for unchanged build inputs
+        id: verified
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', path]))
+
+          repo = os.environ['GITHUB_REPOSITORY']
+          branch = os.environ['GITHUB_REF_NAME']
+          current_id = os.environ['GITHUB_RUN_ID']
+          workflow = Path('.github/workflows/ios-release.yml').read_text()
+          inputs = ['tvbox', 'tvboxTests', 'tvbox-Tests', 'tvbox.xcodeproj', 'project.yml', 'Config', 'scripts', 'package_ios.sh']
+          verified_id = ''
+          for run in api(f'repos/{repo}/actions/runs?branch={branch}&per_page=10')['workflow_runs']:
+              if str(run['id']) == current_id:
+                  continue
+              if subprocess.run(['git', 'diff', '--quiet', run['head_sha'], 'HEAD', '--', *inputs]).returncode:
+                  continue
+              previous = subprocess.check_output(['git', 'show', run['head_sha'] + ':.github/workflows/ios-release.yml'], text=True)
+              if re.findall(r'^\s+DEVELOPER_DIR: (.+)$', previous, re.MULTILINE) != re.findall(r'^\s+DEVELOPER_DIR: (.+)$', workflow, re.MULTILINE):
+                  continue
+              if re.findall(r"['\"](-only-testing:[A-Za-z0-9/_-]+)['\"]", previous) != re.findall(r"['\"](-only-testing:[A-Za-z0-9/_-]+)['\"]", workflow):
+                  continue
+              jobs = api(f'repos/{repo}/actions/runs/{run["id"]}/jobs')['jobs']
+              if any(step['name'] == 'Test iPhone and iPad layouts' and step['conclusion'] == 'success'
+                     for job in jobs for step in job.get('steps', [])):
+                  verified_id = str(run['id'])
+                  print(f'Reusing successful iPhone and iPad tests: {run["html_url"]}')
+                  break
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'run={verified_id}\n')
+          PY
+
       - name: Test iPhone and iPad layouts
+        if: steps.verified.outputs.run == ''
         run: |
           python3 - <<'PY'
           import json
@@ -54,10 +96,14 @@ jobs:
                       '-only-testing:tvbox-Tests/AdaptiveMediaLayoutTests',
                       '-only-testing:tvbox-Tests/PlaybackSleepPreventerTests', 'CODE_SIGNING_ALLOWED=NO']
               with Path('build/DerivedData/' + family + '-tests.log').open('w') as log:
-                  result = subprocess.run(args, stdout=log, stderr=subprocess.STDOUT)
-              if result.returncode:
-                  print(Path('build/DerivedData/' + family + '-tests.log').read_text()[-16000:])
-                  raise SystemExit(result.returncode)
+                  print(f'Running tests on {device["name"]}', flush=True)
+                  process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                  for line in process.stdout:
+                      log.write(line)
+                      print(line, end='', flush=True)
+                  code = process.wait()
+              if code:
+                  raise SystemExit(code)
           PY
 
       - name: Build unsigned device IPA
@@ -67,6 +113,8 @@ jobs:
 
       - name: Inspect package and prepare release files
         id: package
+        env:
+          TEST_SOURCE_RUN: ${{ steps.verified.outputs.run || github.run_id }}
         run: |
           python3 - <<'PY'
           import hashlib
@@ -111,6 +159,7 @@ jobs:
           iPhone 和 iPad 的布局及防休眠 XCTest 已通过，Release 真机架构归档和安装包检查已通过。网络媒体、VLC 解码及真机侧载仍需设备验证。
 
           源码提交：{os.environ['GITHUB_SHA']}
+          测试记录：https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['TEST_SOURCE_RUN']}
           SHA-256：`{digest}`
           ''')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
@@ -119,6 +168,7 @@ jobs:
 
       - name: Publish IPA prerelease
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.package.outputs.tag }}
           RELEASE_VERSION: ${{ steps.package.outputs.version }}
           RELEASE_BUILD: ${{ steps.package.outputs.build }}
