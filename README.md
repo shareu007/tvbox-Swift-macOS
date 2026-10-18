@@ -24,13 +24,14 @@
 | CMS `type=0/1/4` | ✅ | ✅ |
 | CatVod Node 动态源 | 内置 | 内置，独立使用 |
 | Java/DEX `csp_*` JAR | 需兼容 Worker | 需外部 Gateway |
+| 夸克账号与原生网盘解析 | ✅ | 暂未内置 |
 
 iPhone / iPad 的 CatVod 独立运行方式与验证见
 [手机端脚本引擎说明](docs/ios-standalone-spider.md)。
-| 夸克账号与原生网盘解析 | ✅ | 暂未内置 |
 
 App 不执行 Java/DEX，也不保证兼容所有第三方规则、网页嗅探、DRM 或解析器。
-远程 CatVod 脚本运行在独立子进程中，不会收到用户的网盘 Cookie/Token。
+远程 CatVod 脚本在 macOS 通过独立子进程运行，在 iOS 通过 App 内 Node
+工作线程运行；运行接口不向第三方脚本传入网盘 Cookie/Token。
 
 ## 构建
 
