@@ -8,6 +8,7 @@ struct EpisodeListView: View {
     let selectedIndex: Int
     /// 点击某一集后的回调（返回绝对索引）。
     let onSelect: (Int) -> Void
+    var horizontalPadding: CGFloat = 20
     
     /// 当前分组索引（每 50 集一个分组，避免超长列表影响渲染与选择体验）。
     @State private var currentGroup = 0
@@ -61,7 +62,7 @@ struct EpisodeListView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, horizontalPadding)
                 }
             }
             
@@ -96,9 +97,18 @@ struct EpisodeListView: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("播放\(episode.name)")
+                    .accessibilityAddTraits(actualIndex == selectedIndex ? [.isSelected] : [])
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, horizontalPadding)
         }
+        .onAppear { syncSelectedGroup() }
+        .onChange(of: selectedIndex) { _, _ in syncSelectedGroup() }
+        .onChange(of: episodes) { _, _ in syncSelectedGroup() }
+    }
+
+    private func syncSelectedGroup() {
+        currentGroup = min(max(selectedIndex, 0) / groupSize, groupCount - 1)
     }
 }

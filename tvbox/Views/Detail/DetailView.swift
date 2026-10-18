@@ -27,92 +27,74 @@ struct DetailView: View {
     @State private var showDownloadSelection = false
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                if viewModel.isLoading {
-                    ProgressView("正在读取剧集…").padding()
-                }
-                // 播放器区域
-                if !showFullScreen, !isFullScreenDismissing, viewModel.isPlaying, let url = viewModel.playUrl {
-                    PlayerView(
-                        urlString: url,
-                        headers: viewModel.playbackHeaders,
-                        sourceSubtitles: viewModel.sourceSubtitles,
-                        startPosition: viewModel.currentPlaybackSeconds(),
-                        onProgressChanged: handlePlaybackProgress,
-                        onPlaybackEnded: playNextEpisodeIfNeeded,
-                        onToggleFullScreen: {
-                            openFullScreenPlayer()
-                        },
-                        canPlayNext: canPlayNextEpisode,
-                        onPlayNext: playNextEpisodeIfNeeded,
-                        systemController: sharedSystemController,
-                        vlcController: sharedVLCController,
-                        mpvController: sharedMPVController
-                    )
-                        .id("\(viewModel.selectedFlag)-\(viewModel.selectedEpisodeIndex)-\(url)")
-                        .aspectRatio(16/9, contentMode: .fit)
-                        .background(Color.black)
-                        .onTapGesture(count: 2) {
-                            openFullScreenPlayer()
-                        }
-                }
-
-                if let error = viewModel.errorMessage, !error.isEmpty {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                        Text(error)
-                            .font(.callout)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: 0).id("detail-top")
+                    if viewModel.isLoading {
+                        ProgressView("正在读取剧集…").padding()
                     }
-                    .foregroundColor(.red.opacity(0.9))
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                
-                // 视频信息
-                videoInfoSection
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                
-                if let notice = viewModel.playbackNotice, viewModel.isPlaying {
-                    Label(notice.message, systemImage: "info.circle")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                }
+                    // 播放器区域
+                    if !showFullScreen, !isFullScreenDismissing, viewModel.isPlaying, let url = viewModel.playUrl {
+                        PlayerView(
+                            urlString: url,
+                            headers: viewModel.playbackHeaders,
+                            sourceSubtitles: viewModel.sourceSubtitles,
+                            startPosition: viewModel.currentPlaybackSeconds(),
+                            onProgressChanged: handlePlaybackProgress,
+                            onPlaybackEnded: playNextEpisodeIfNeeded,
+                            onToggleFullScreen: {
+                                openFullScreenPlayer()
+                            },
+                            canPlayNext: canPlayNextEpisode,
+                            onPlayNext: playNextEpisodeIfNeeded,
+                            systemController: sharedSystemController,
+                            vlcController: sharedVLCController,
+                            mpvController: sharedMPVController
+                        )
+                            .id("\(viewModel.selectedFlag)-\(viewModel.selectedEpisodeIndex)-\(url)")
+                            .aspectRatio(16/9, contentMode: .fit)
+                            .background(Color.black)
+                            .onTapGesture(count: 2) {
+                                openFullScreenPlayer()
+                            }
+                    }
 
-                // 线路选择
-                if viewModel.flags.count > 1 {
-                    flagSelector
+                    if let error = viewModel.errorMessage, !error.isEmpty {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                            Text(error)
+                                .font(.callout)
+                        }
+                        .foregroundColor(.red.opacity(0.9))
                         .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                }
+                        .padding(.top, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 
-                // 清晰度选择
-                if viewModel.hasQualityChoices {
-                    qualitySelector
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                }
+                    // 视频信息
+                    videoInfoSection
                 
-                // 剧集列表
-                if !viewModel.currentEpisodes.isEmpty {
-                    episodeSection
-                        .padding(.top, 16)
+                    if let notice = viewModel.playbackNotice, viewModel.isPlaying {
+                        Label(notice.message, systemImage: "info.circle")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
+                    }
+
+                    // 剧集列表
+                    if !viewModel.currentEpisodes.isEmpty {
+                        episodeSection
+                    }
                 }
-                
-                // 简介
-                if let info = viewModel.vodInfo, !info.des.isEmpty {
-                    descriptionSection(info.des)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                }
+                .padding(.bottom, 40)
             }
-            .padding(.bottom, 40)
+            .onChange(of: viewModel.playUrl) { _, url in
+                if url != nil { proxy.scrollTo("detail-top", anchor: .top) }
+            }
         }
-        .background(AppTheme.primaryGradient)
+        .background(AppTheme.background)
         .navigationTitle(video.name)
         .sheet(isPresented: $showDownloadSelection) {
             if let info = viewModel.vodInfo {
@@ -207,320 +189,154 @@ struct DetailView: View {
         #endif
     }
     
-    // MARK: - 视频信息
-    
-    #if os(iOS)
-    @ViewBuilder
+    // MARK: - 影片信息与操作
+
+    private var displayInfo: VodInfo {
+        var info = viewModel.vodInfo ?? VodInfo.from(video: video, playFrom: "", playUrl: "")
+        if info.name.isEmpty { info.name = video.name }
+        if info.pic.isEmpty { info.pic = video.pic }
+        return info
+    }
+
     private var videoInfoSection: some View {
-        VStack(spacing: 16) {
-            // Poster centered, height capped to 30% of screen
-            let posterHeight = UIScreen.main.bounds.height * 0.30
-            CachedAsyncImage(url: URL.posterURL(from: video.pic)) { image in
-                image.resizable().aspectRatio(2/3, contentMode: .fit)
-            } placeholder: {
-                Color.primary.opacity(0.05)
-                    .aspectRatio(2/3, contentMode: .fit)
-            }
-            .frame(maxHeight: posterHeight)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardRadius))
-
-            // Info below poster
-            videoDetails
-
-            // Action buttons with 48pt height
-            HStack(spacing: 12) {
-                playButton
-                collectButton
-                downloadButton
-            }
-            .frame(minHeight: 48)
-        }
-        .padding(15)
-        .glassCard(cornerRadius: AppTheme.glassRadius)
-    }
-    #else
-    @ViewBuilder
-    private var videoInfoSection: some View {
-        HStack(alignment: .top, spacing: 20) {
-            videoPoster
-            
-            videoDetails
-            
-            Spacer()
-        }
-        .padding(15)
-        .glassCard(cornerRadius: AppTheme.glassRadius)
-    }
-    #endif
-
-    @ViewBuilder
-    private var videoPoster: some View {
-        CachedAsyncImage(url: URL.posterURL(from: video.pic)) { image in
-            image.resizable().aspectRatio(2/3, contentMode: .fill)
-        } placeholder: {
-            ZStack {
-                Color.primary.opacity(0.05)
-                Image(systemName: "film.fill").foregroundColor(.secondary)
-            }
-            .aspectRatio(2/3, contentMode: .fill)
-        }
-        .frame(width: 130)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardRadius))
-        .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 5)
-    }
-
-    @ViewBuilder
-    private var videoDetails: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(viewModel.vodInfo?.name ?? video.name)
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(.primary)
-            
-            if let info = viewModel.vodInfo {
-                VStack(alignment: .leading, spacing: 6) {
-                    infoRow("年份", info.year)
-                    infoRow("地区", info.area)
-                    infoRow("类型", info.typeName)
-                    infoRow("导演", info.director)
-                    infoRow("演员", info.actor)
+        DetailCinemaHeader(info: displayInfo, compact: viewModel.isPlaying) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { playButton; collectButton; downloadButton }
+                VStack(alignment: .leading, spacing: 10) {
+                    playButton
+                    HStack(spacing: 10) { collectButton; downloadButton }
                 }
             }
-            
-            #if os(macOS)
-            Spacer(minLength: 10)
-            
-            HStack(spacing: 10) {
-                playButton
-                collectButton
-                downloadButton
-            }
-            #endif
         }
     }
 
     @ViewBuilder
     private var playButton: some View {
-        if !viewModel.isPlaying && viewModel.vodInfo != nil {
+        if !viewModel.isPlaying {
             Button {
                 viewModel.selectEpisode(index: 0)
                 saveHistoryForCurrentEpisode()
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "play.fill")
-                    Text("立即播放")
-                }
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 14)
-                .background(AppTheme.accentGradient)
-                .clipShape(Capsule())
-                .shadow(color: .red.opacity(0.4), radius: 10, x: 0, y: 5)
+                Label("立即播放", systemImage: "play.fill")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(DetailCinemaActionStyle(prominent: true, onArtwork: true))
+            .disabled(viewModel.currentEpisodes.isEmpty)
         }
     }
-    
+
     private var downloadButton: some View {
         Button { showDownloadSelection = true } label: {
             Label("下载", systemImage: "arrow.down.circle")
-                .font(.system(size: 15, weight: .semibold))
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .background(Color.primary.opacity(0.08)).clipShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DetailCinemaActionStyle(onArtwork: !viewModel.isPlaying))
         .disabled(viewModel.currentEpisodes.isEmpty)
     }
 
     private var collectButton: some View {
-        Button {
-            toggleCollect()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: isCollected ? "heart.fill" : "heart")
-                Text(isCollected ? "已收藏" : "收藏")
-            }
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(isCollected ? .white : .primary)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(
-                Group {
-                    if isCollected {
-                        AppTheme.accentGradient
-                    } else {
-                        Color.primary.opacity(0.08)
-                    }
-                }
-            )
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(Color.primary.opacity(isCollected ? 0 : 0.2), lineWidth: 1)
-            )
+        Button { toggleCollect() } label: {
+            Label(isCollected ? "已收藏" : "收藏", systemImage: isCollected ? "checkmark" : "plus")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DetailCinemaActionStyle(onArtwork: !viewModel.isPlaying))
     }
-    
-    @ViewBuilder
-    private func infoRow(_ label: String, _ value: String) -> some View {
-        if !value.isEmpty {
-            HStack(alignment: .top, spacing: 4) {
-                Text(label)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                    .frame(width: 36, alignment: .leading)
-                Text(value)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-        }
-    }
-    
+
     // MARK: - 线路选择
     
-    @ViewBuilder
     private var flagSelector: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("播放线路")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.primary)
-            
-            flagScrollView
-        }
-        .padding(15)
-        .glassCard(cornerRadius: AppTheme.glassRadius)
-    }
-
-    @ViewBuilder
-    private var flagScrollView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(viewModel.flags, id: \.self) { flag in
-                    flagButton(flag)
+        Menu {
+            ForEach(viewModel.flags, id: \.self) { flag in
+                Button {
+                    viewModel.selectFlag(flag)
+                    if viewModel.isPlaying { saveHistoryForCurrentEpisode() }
+                } label: {
+                    if viewModel.selectedFlag == flag {
+                        Label(flag, systemImage: "checkmark")
+                    } else { Text(flag) }
                 }
             }
+        } label: {
+            HStack(spacing: 10) {
+                Text("线路").foregroundStyle(.secondary)
+                Text(viewModel.selectedFlag).lineLimit(1)
+                Image(systemName: "chevron.down").font(.caption)
+            }
+            .font(.subheadline.weight(.medium))
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.15)))
         }
+        .menuStyle(.borderlessButton)
+        .frame(maxWidth: 320, alignment: .trailing)
+        .accessibilityLabel("播放线路：\(viewModel.selectedFlag)")
     }
 
-    @ViewBuilder
-    private func flagButton(_ flag: String) -> some View {
-        Button {
-            withAnimation {
-                viewModel.selectFlag(flag)
-            }
-            if viewModel.isPlaying {
-                saveHistoryForCurrentEpisode()
-            }
-        } label: {
-            Text(flag)
-                .font(.system(size: 14, weight: viewModel.selectedFlag == flag ? .bold : .medium))
-                .foregroundColor(viewModel.selectedFlag == flag ? .white : .secondary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(
-                    ZStack {
-                        if viewModel.selectedFlag == flag {
-                            AppTheme.accentGradient
-                        } else {
-                            Color.primary.opacity(0.05)
-                        }
-                    }
-                )
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-    
     // MARK: - 清晰度选择
     
-    @ViewBuilder
     private var qualitySelector: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("视频清晰度")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.primary)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(viewModel.qualityOptions) { option in
-                        qualityButton(option)
+        HStack(spacing: 12) {
+            Text("清晰度").font(.subheadline).foregroundStyle(.secondary)
+            Menu {
+                ForEach(viewModel.qualityOptions) { option in
+                    Button {
+                        viewModel.selectQuality(option)
+                        if viewModel.isPlaying { saveHistoryForCurrentEpisode() }
+                    } label: {
+                        if viewModel.selectedQualityId == option.id {
+                            Label(option.name, systemImage: "checkmark")
+                        } else { Text(option.name) }
                     }
                 }
+            } label: {
+                Label(viewModel.qualityOptions.first { $0.id == viewModel.selectedQualityId }?.name ?? "自动",
+                      systemImage: "chevron.down")
+                    .font(.subheadline).frame(minHeight: 44)
             }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            Spacer(minLength: 0)
         }
-        .padding(15)
-        .glassCard(cornerRadius: AppTheme.glassRadius)
+        .accessibilityLabel("视频清晰度")
     }
-    
-    @ViewBuilder
-    private func qualityButton(_ option: PlaybackQualityOption) -> some View {
-        Button {
-            withAnimation {
-                viewModel.selectQuality(option)
-            }
-            if viewModel.isPlaying {
-                saveHistoryForCurrentEpisode()
-            }
-        } label: {
-            Text(option.name)
-                .font(.system(size: 14, weight: viewModel.selectedQualityId == option.id ? .bold : .medium))
-                .foregroundColor(viewModel.selectedQualityId == option.id ? .white : .secondary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(
-                    ZStack {
-                        if viewModel.selectedQualityId == option.id {
-                            AppTheme.accentGradient
-                        } else {
-                            Color.primary.opacity(0.05)
-                        }
-                    }
-                )
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-    
+
     // MARK: - 剧集列表
     
     private var episodeSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("选集播放")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.primary)
-                .padding(.horizontal, 20)
-            
+        VStack(alignment: .leading, spacing: 16) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
+                    episodeHeading
+                    Spacer(minLength: 16)
+                    if viewModel.flags.count > 1 { flagSelector }
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    episodeHeading
+                    if viewModel.flags.count > 1 { flagSelector }
+                }
+            }
+            if viewModel.hasQualityChoices { qualitySelector }
             EpisodeListView(
                 episodes: viewModel.currentEpisodes,
                 selectedIndex: viewModel.selectedEpisodeIndex,
                 onSelect: { index in
-                    withAnimation {
-                        viewModel.selectEpisode(index: index)
-                    }
+                    viewModel.selectEpisode(index: index)
                     saveHistoryForCurrentEpisode()
-                }
+                },
+                horizontalPadding: 0
             )
         }
+        .padding(.horizontal, 28)
+        .padding(.top, 28)
     }
-    
-    // MARK: - 简介
-    
-    private func descriptionSection(_ des: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("影片简介")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.primary)
-            
-            Text(des)
-                .font(.system(size: 14))
-                .foregroundColor(.secondary)
-                .lineSpacing(4)
-                .lineLimit(nil)
+
+    private var episodeHeading: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(viewModel.currentEpisodes.count > 1 ? "剧集" : "播放资源")
+                .font(.title2.bold())
+            if viewModel.currentEpisodes.count > 1 {
+                Text("共 \(viewModel.currentEpisodes.count) 集")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
         }
-        .padding(15)
-        .glassCard(cornerRadius: AppTheme.glassRadius)
     }
 
     private var canPlayNextEpisode: Bool {
