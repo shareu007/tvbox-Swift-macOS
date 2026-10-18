@@ -5,6 +5,11 @@ on:
     branches:
       - 'release/ios-universal-*'
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the IPA as a GitHub prerelease
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -168,6 +173,8 @@ jobs:
           - 修复 iPhone 添加 CatVod 接口时提示配置 Spider Gateway 的问题。
           - 内置手机端脚本引擎，CatVod `.js / .js.md5` 独立运行，无需电脑或外部网关。
           - 支持目录、首页、分类、详情、搜索及播放地址解析；保留 iPhone / iPad 自适应布局。
+          - iPhone / iPad 新增「设置 → 网盘设置」，支持粘贴、网页登录保存及清除凭据。
+          - 夸克 Cookie 保存或更换后直接用于下一次播放，清除后提示重新登录；修复 Cookie 刷新导致解析失败。
 
           此 IPA 未使用 Apple 证书签名，不能直接点击安装；请使用支持的侧载工具自行签名。安装包不含接口配置，需自行添加。
 
@@ -182,6 +189,7 @@ jobs:
           PY
 
       - name: Publish IPA prerelease
+        if: github.event_name == 'push' || inputs.publish_release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.package.outputs.tag }}

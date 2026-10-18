@@ -1,4 +1,3 @@
-#if os(macOS)
 import Foundation
 import SwiftUI
 import WebKit
@@ -26,7 +25,17 @@ enum CloudDriveLoginProvider: String, Identifiable {
     }
 
     var scanInstruction: String {
+#if os(macOS)
         "请使用\(title)手机 App 扫描网页中的官方二维码，并在手机上确认登录"
+#else
+        "在官方网页完成登录后会自动保存凭据。若显示二维码，请用另一台设备扫码；也可返回手动粘贴凭据。"
+#endif
+    }
+
+    func allowsCredentialCapture(at url: URL?) -> Bool {
+        guard let host = url?.host?.lowercased(), url?.scheme == "https" else { return false }
+        let domains = self == .quark ? ["quark.cn"] : ["alipan.com", "aliyundrive.com"]
+        return domains.contains { host == $0 || host.hasSuffix("." + $0) }
     }
 }
 
@@ -103,7 +112,7 @@ struct CloudDriveWebLoginView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("扫码登录\(provider.title)")
+                    Text("登录\(provider.title)")
                         .font(.headline)
                     Text(provider.scanInstruction)
                         .font(.caption)
@@ -114,8 +123,9 @@ struct CloudDriveWebLoginView: View {
                     reloadID = UUID()
                     status = "正在重新载入官方登录页面…"
                 } label: {
-                    Label("重新载入", systemImage: "arrow.clockwise")
+                    Image(systemName: "arrow.clockwise")
                 }
+                .accessibilityLabel("重新载入")
                 Button("取消") { dismiss() }
             }
             .padding(16)
@@ -145,11 +155,19 @@ struct CloudDriveWebLoginView: View {
             .padding(.horizontal, 16)
             .frame(height: 42)
         }
+#if os(macOS)
         .frame(minWidth: 900, minHeight: 680)
+#endif
     }
 }
 
-private struct CloudDriveLoginWebView: NSViewRepresentable {
+#if os(macOS)
+private typealias CloudDriveWebViewRepresentable = NSViewRepresentable
+#else
+private typealias CloudDriveWebViewRepresentable = UIViewRepresentable
+#endif
+
+private struct CloudDriveLoginWebView: CloudDriveWebViewRepresentable {
     let provider: CloudDriveLoginProvider
     @Binding var status: String
     let onCredential: (String) -> Void
@@ -158,10 +176,27 @@ private struct CloudDriveLoginWebView: NSViewRepresentable {
         Coordinator(provider: provider, status: $status, onCredential: onCredential)
     }
 
-    func makeNSView(context: Context) -> WKWebView {
+#if os(macOS)
+    func makeNSView(context: Context) -> WKWebView { makeWebView(context: context) }
+    func updateNSView(_ webView: WKWebView, context: Context) {}
+    static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        dismantle(webView, coordinator: coordinator)
+    }
+#else
+    func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
+    func updateUIView(_ webView: WKWebView, context: Context) {}
+    static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        dismantle(webView, coordinator: coordinator)
+    }
+#endif
+
+    private func makeWebView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+#if os(iOS)
+        configuration.defaultWebpagePreferences.preferredContentMode = .desktop
+#endif
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -170,9 +205,7 @@ private struct CloudDriveLoginWebView: NSViewRepresentable {
         return webView
     }
 
-    func updateNSView(_ webView: WKWebView, context: Context) {}
-
-    static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+    private static func dismantle(_ webView: WKWebView, coordinator: Coordinator) {
         coordinator.stop()
         webView.navigationDelegate = nil
         webView.stopLoading()
@@ -185,6 +218,7 @@ private struct CloudDriveLoginWebView: NSViewRepresentable {
         private weak var webView: WKWebView?
         private var timer: Timer?
         private var completed = false
+        private var polling = false
 
         init(
             provider: CloudDriveLoginProvider,
@@ -204,12 +238,13 @@ private struct CloudDriveLoginWebView: NSViewRepresentable {
         }
 
         func stop() {
+            completed = true
             timer?.invalidate()
             timer = nil
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            status.wrappedValue = "页面已载入，等待手机扫码确认…"
+            status.wrappedValue = "页面已载入，等待完成登录…"
             pollCredential()
         }
 
@@ -230,10 +265,13 @@ private struct CloudDriveLoginWebView: NSViewRepresentable {
         }
 
         private func pollCredential() {
-            guard !completed, let webView else { return }
+            guard !completed, !polling, let webView,
+                  provider.allowsCredentialCapture(at: webView.url) else { return }
+            polling = true
             switch provider {
             case .quark:
                 webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self] cookies in
+                    self?.polling = false
                     guard let credential = CloudDriveLoginCredentialExtractor.quarkCookie(from: cookies) else {
                         return
                     }
@@ -241,6 +279,7 @@ private struct CloudDriveLoginWebView: NSViewRepresentable {
                 }
             case .ali:
                 webView.evaluateJavaScript(Self.storageValuesScript) { [weak self] result, _ in
+                    self?.polling = false
                     guard let json = result as? String,
                           let data = json.data(using: .utf8),
                           let values = try? JSONDecoder().decode([String].self, from: data),
@@ -279,4 +318,3 @@ private struct CloudDriveLoginWebView: NSViewRepresentable {
         """
     }
 }
-#endif

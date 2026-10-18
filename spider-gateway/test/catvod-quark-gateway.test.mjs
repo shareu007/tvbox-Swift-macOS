@@ -19,12 +19,13 @@ async function setup(t, options = {}) {
     fetchValue: async (rawURL, request) => {
       const url = new URL(rawURL);
       assert.equal(url.hostname, "drive-pc.quark.cn", "Only Quark receives account credentials");
-      assert.equal(request.headers.cookie, "fixture-cookie");
+      assert.equal(request.headers.cookie, options.rotateCookie && observed.requests.length > 0
+        ? "fixture-cookie; __puus=fixture-refreshed" : "fixture-cookie");
       observed.requests.push(url.pathname);
       if (options.expired) return new Response(null, { status: 401 });
       if (url.pathname.endsWith("/share/sharepage/detail")) return Response.json({ data: { list: options.missingFile ? [] : [{
         fid: "fixture-file", share_fid_token: "fixture-fresh-file-token", file_name: "movie.mp4", size: 10 * 1024 * 1024
-      }] } });
+      }] } }, options.rotateCookie ? { headers: { "set-cookie": "__puus=fixture-refreshed; Path=/; Secure; HttpOnly" } } : undefined);
       if (url.pathname.endsWith("/file/sort")) {
         if (url.searchParams.get("pdir_fid") !== "0") return Response.json({ data: { list: observed.savedFiles } });
         const page = Number(url.searchParams.get("_page"));
@@ -82,6 +83,15 @@ test("CatVod Quark playback uses saved credentials in the parent instead of the 
   assert.equal(result.body.header.cookie, "fixture-cookie");
   assert.equal(observed.sourceCalls, 0);
   assert.equal(observed.saves, 1);
+});
+
+test("Quark Cookie refresh is applied during playback without failing on a read-only credential", async t => {
+  const { play, observed } = await setup(t, { rotateCookie: true });
+  const result = await play();
+  assert.equal(result.status, 200);
+  assert.equal(result.body.url, "https://media.quark.cn/original.mp4");
+  assert.equal(result.body.header.cookie, "fixture-cookie; __puus=fixture-refreshed");
+  assert.equal(observed.sourceCalls, 0);
 });
 
 test("availability checks do not transfer cloud files or send account credentials", async t => {

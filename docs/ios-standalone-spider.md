@@ -5,6 +5,24 @@
 或填写外部 Spider Gateway。JSON/XML/Remote 接口继续由 Swift 原生加载。
 Android Java/DEX `csp_*` JAR 仍需要兼容的外部执行环境。
 
+## 网盘设置
+
+iPhone、iPad 和 Mac 均可通过「设置 → 网盘设置」粘贴、保存或清除
+夸克 Cookie 与阿里云盘 refresh token，也可打开官方网页登录页自动提取凭据。
+手机上的登录页使用桌面网页模式；若官方页面只提供二维码，需要另一台设备
+扫码，或返回手动粘贴。取消或重新载入页面后，旧页面的异步回调不会保存凭据。
+
+两个字段作为一次更新保存，某个字段超出 32 KB 时不会只更新另一项。
+清空字段后点击保存会删除该项。凭据不进入点播接口配置或第三方脚本，
+仅由本机可信的网盘解析组件使用。iOS 在每次请求前更新引擎配置，
+因此保存、更换或清除 Cookie 均不需要重启 App。
+
+当前本机网盘播放链路已接入夸克与 123；123 无需凭据。
+阿里 Token 的保存入口与 Mac 对齐，不代表阿里或其他网盘线路已实现本机播放。
+缺少或失效的夸克 Cookie 会返回更新凭据的提示。
+夸克响应刷新 Cookie 时，可信解析组件可更新当前请求中的凭据，
+避免因只读属性导致原画或转码解析失败；刷新结果不自动覆盖用户保存的值。
+
 此前 iOS 的 `prepareGatewayIfNeeded` 没有本地启动分支，脚本目录请求
 会直接失败为“请先在设置中配置 Spider Gateway”。仅添加网关设置入口无法
 满足独立使用要求。
@@ -41,6 +59,13 @@ Android Java/DEX `csp_*` JAR 仍需要兼容的外部执行环境。
 `SettingsViewModel.loadConfig`，仅替换脚本下载边界，实际执行内置 Node、
 回环 HTTP、CatVod 工作线程、配置解析及首页到播放地址解析的完整链路。
 同一测试验证原生 `fetch` 可用、没有保存外部网关，以及文件和桥接边界。
+测试也覆盖未配置 Cookie 时提示登录、保存 Cookie 后播放、更换凭据后继续播放、
+清除后再次提示登录，所有网盘 HTTP 请求均使用虚构凭据和固定响应，
+不读取真实账号或转存真实网盘文件。
+
+`CloudDriveCredentialFileStoreTests` 与 `CloudDriveLoginCredentialExtractorTests`
+在 iOS 和 macOS 上均参与编译，覆盖重新打开后的读取、更新、清除、
+批量保存失败的原子性、文件权限和官方登录域名检查。
 
 ```sh
 xcodegen generate

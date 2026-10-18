@@ -16,12 +16,15 @@ enum CloudDriveCredentialStore {
     }
 
     static func save(_ value: String, for credential: Credential) throws {
-        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalized.lengthOfBytes(using: .utf8) <= maximumCredentialBytes else {
-            throw CloudDriveCredentialError.tooLarge(maximumCredentialBytes)
-        }
+        try save([credential: value])
+    }
+
+    /// Validate and persist the whole settings form together.
+    static func save(_ values: [Credential: String]) throws {
         do {
-            try fileStore.save(normalized, forKey: credential.rawValue)
+            try fileStore.save(Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) }))
+        } catch let error as CloudDriveCredentialError {
+            throw error
         } catch {
             throw CloudDriveCredentialError.file(error.localizedDescription)
         }
@@ -68,12 +71,21 @@ struct CloudDriveCredentialFileStore {
     }
 
     func save(_ value: String, forKey key: String) throws {
+        try save([key: value])
+    }
+
+    func save(_ updates: [String: String]) throws {
         var storedValues = values()
-        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if normalized.isEmpty {
-            storedValues.removeValue(forKey: key)
-        } else {
-            storedValues[key] = normalized
+        for (key, value) in updates {
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard normalized.lengthOfBytes(using: .utf8) <= CloudDriveCredentialStore.maximumCredentialBytes else {
+                throw CloudDriveCredentialError.tooLarge(CloudDriveCredentialStore.maximumCredentialBytes)
+            }
+            if normalized.isEmpty {
+                storedValues.removeValue(forKey: key)
+            } else {
+                storedValues[key] = normalized
+            }
         }
 
         let directoryURL = fileURL.deletingLastPathComponent()

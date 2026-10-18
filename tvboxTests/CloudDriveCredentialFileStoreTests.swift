@@ -1,4 +1,3 @@
-#if os(macOS)
 import XCTest
 @testable import TVBox
 
@@ -60,5 +59,22 @@ final class CloudDriveCredentialFileStoreTests: XCTestCase {
             XCTAssertEqual(maximumBytes, CloudDriveCredentialStore.maximumCredentialBytes)
         }
     }
+
+    func testSavesBothFieldsTogetherAndKeepsValuesAcrossReopening() throws {
+        try store.save(["quark-cookie": " cookie-value ", "ali-refresh-token": " token-value "])
+        let reopened = CloudDriveCredentialFileStore(fileURL: store.fileURL)
+        XCTAssertEqual(reopened.values(), ["quark-cookie": "cookie-value", "ali-refresh-token": "token-value"])
+        try reopened.save(["quark-cookie": "", "ali-refresh-token": "updated-token"])
+        XCTAssertEqual(store.values(), ["ali-refresh-token": "updated-token"])
+    }
+
+    func testInvalidFormDoesNotPartiallyReplaceSavedCredentials() throws {
+        try store.save(["quark-cookie": "previous-cookie", "ali-refresh-token": "previous-token"])
+        let original = try Data(contentsOf: store.fileURL)
+        XCTAssertThrowsError(try store.save([
+            "quark-cookie": "new-cookie",
+            "ali-refresh-token": String(repeating: "x", count: CloudDriveCredentialStore.maximumCredentialBytes + 1)
+        ]))
+        XCTAssertEqual(try Data(contentsOf: store.fileURL), original)
+    }
 }
-#endif

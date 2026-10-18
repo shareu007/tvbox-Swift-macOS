@@ -4,7 +4,9 @@ import XCTest
 
 @MainActor
 final class MobileSpiderGatewayTests: XCTestCase {
-    func testCatVodFirstImportAndPlaybackResolveWithoutSavedGateway() async throws {
+    func testCatVodImportAndCloudPlaybackUseSavedCredentialsWithoutExternalGateway() async throws {
+        let previousCookie = CloudDriveCredentialStore.value(for: .quarkCookie)
+        let previousAliToken = CloudDriveCredentialStore.value(for: .aliToken)
         let previousURL = SpiderGatewaySettings.savedBaseURL
         let previousToken = SpiderGatewaySettings.savedToken
         let config = ApiConfig.shared
@@ -19,6 +21,7 @@ final class MobileSpiderGatewayTests: XCTestCase {
         let previousHistory = defaults.object(forKey: "api_history")
         let previousHomeKey = defaults.object(forKey: HawkConfig.HOME_API)
         defer {
+            try? CloudDriveCredentialStore.save([.quarkCookie: previousCookie, .aliToken: previousAliToken])
             SpiderGatewaySettings.useEmbeddedGateway(at: nil)
             try? SpiderGatewaySettings.save(previousURL)
             try? SpiderGatewaySettings.saveToken(previousToken)
@@ -35,6 +38,7 @@ final class MobileSpiderGatewayTests: XCTestCase {
         }
         try SpiderGatewaySettings.save("")
         try SpiderGatewaySettings.saveToken("")
+        try CloudDriveCredentialStore.save([.quarkCookie: "", .aliToken: ""])
         SpiderGatewaySettings.useEmbeddedGateway(at: nil)
         XCTAssertFalse(SpiderGatewaySettings.isConfigured)
 
@@ -54,11 +58,38 @@ final class MobileSpiderGatewayTests: XCTestCase {
         import { startMobileGateway } from \(modulePath);
         const bridge = process._linkedBinding('tvbox_mobile');
         let gateway;
+        let folderName = '';
+        let savedFiles = [];
         gateway = await startMobileGateway(bridge, {nodeBundleCache: {async resolve() {
             const response = await fetch(`http://127.0.0.1:${gateway.server.address().port}/health`);
             if (!(await response.json()).catVodConfigured) throw new Error('Native fetch failed');
             return {path: \(bundlePath), digest: 'mobile-fixture'};
-        }}}).catch(() => bridge.failed());
+        }}, fetchValue: async (rawURL, request) => {
+            const url = new URL(rawURL);
+            if (url.hostname !== 'drive-pc.quark.cn') throw new Error('Unexpected fixture host');
+            const expected = JSON.parse(bridge.configuration()).cloudConfig.quarkCookie;
+            if (!expected || request.headers.cookie !== expected) return new Response(null, {status: 401});
+            if (url.pathname.endsWith('/share/sharepage/detail')) return Response.json({data: {list: [
+                {fid: 'fixture-file', share_fid_token: 'fixture-fresh-token', file_name: 'movie.mp4', size: 10485760}
+            ]}});
+            if (url.pathname.endsWith('/file/sort')) return Response.json({data: {list:
+                url.searchParams.get('pdir_fid') === '0'
+                    ? (folderName ? [{dir: 1, fid: 'fixture-cache', file_name: folderName}] : []) : savedFiles
+            }});
+            if (url.pathname.endsWith('/file')) {
+                folderName = JSON.parse(request.body).file_name;
+                return Response.json({data: {fid: 'fixture-cache'}});
+            }
+            if (url.pathname.endsWith('/share/sharepage/save')) return Response.json({data: {task_id: 'fixture-task'}});
+            if (url.pathname.endsWith('/task')) {
+                savedFiles = [{fid: 'fixture-saved-file', file_name: 'movie.mp4', size: 10485760}];
+                return Response.json({data: {save_as: {save_as_top_fids: ['fixture-saved-file']}}});
+            }
+            if (url.pathname.endsWith('/file/download')) return Response.json({data: [
+                {fid: 'fixture-saved-file', download_url: 'https://media.quark.cn/fixture.mp4'}
+            ]});
+            throw new Error('Unexpected fixture operation');
+        }}).catch(() => bridge.failed());
         """.write(to: entry, atomically: true, encoding: .utf8)
         let runtime = MobileSpiderGateway(resourcesDirectory: resources, entryPoint: entry, cacheDirectory: root)
         _ = try await runtime.ensureStarted()
@@ -102,6 +133,39 @@ final class MobileSpiderGatewayTests: XCTestCase {
         SpiderGatewaySettings.useEmbeddedGateway(at: nil)
         let restored = try await service.search(source: source, keyword: "after-settings-change")
         XCTAssertEqual(restored.first?.id, "after-settings-change")
+
+        let cloudSource = SourceBean(key: "cloud-fixture", name: "Fixture cloud",
+                                    api: "/spider/wogg/3", type: 3, jar: reference)
+        let cloudEpisode = try JSONSerialization.data(withJSONObject: [
+            "providerId": "quark", "shareId": "fixture-share", "fileId": "fixture-file", "mode": "original",
+            "playToken": try jsonStringDictionary([
+                "shareId": "fixture-share", "fid": "fixture-file", "stoken": "fixture-token",
+                "shareFidToken": "fixture-file-token", "fileName": "movie.mp4"
+            ])
+        ]).base64EncodedString()
+        await assertCloudLoginRequired(service: service, source: cloudSource, episode: cloudEpisode)
+        for cookie in ["__puus=fixture-first", "__puus=fixture-replacement"] {
+            try CloudDriveCredentialStore.save([.quarkCookie: cookie, .aliToken: "fixture-ali-token"])
+            let cloudPlayback = try await service.player(source: cloudSource, flag: "夸克原画", id: cloudEpisode)
+            XCTAssertEqual(cloudPlayback.url, "https://media.quark.cn/fixture.mp4")
+            XCTAssertEqual(cloudPlayback.headers.first { $0.key.lowercased() == "cookie" }?.value, cookie)
+            XCTAssertTrue(SpiderGatewaySettings.savedBaseURL.isEmpty)
+        }
+        try CloudDriveCredentialStore.save([.quarkCookie: "", .aliToken: ""])
+        await assertCloudLoginRequired(service: service, source: cloudSource, episode: cloudEpisode)
+    }
+
+    private func assertCloudLoginRequired(service: SpiderGatewayService, source: SourceBean, episode: String) async {
+        do {
+            _ = try await service.player(source: source, flag: "夸克原画", id: episode)
+            XCTFail("Missing or cleared Cookie must require login")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("保存夸克 Cookie"))
+        }
+    }
+
+    private func jsonStringDictionary(_ value: [String: String]) throws -> String {
+        String(decoding: try JSONSerialization.data(withJSONObject: value), as: UTF8.self)
     }
 
     func testManifestAllowlistRemovesCredentialsAndIncludesPairedScript() {

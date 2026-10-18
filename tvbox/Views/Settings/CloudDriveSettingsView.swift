@@ -1,4 +1,3 @@
-#if os(macOS)
 import SwiftUI
 
 struct CloudDriveSettingsView: View {
@@ -27,7 +26,11 @@ struct CloudDriveSettingsView: View {
                     )
                 }
 
-                Text("123 网盘无需登录凭据。夸克 Cookie 和阿里 Token 只保存在本机 Application Support 私有目录，不会触发钥匙串认证，也不会随项目上传到 GitHub。")
+                Text("夸克网盘线路使用夸克 Cookie。可粘贴已有凭据，也可在官方网页完成登录后自动保存。123 网盘无需登录凭据。阿里 Token 供兼容线路使用，保存 Token 不代表所有阿里线路都支持播放。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Text("凭据仅保存在本机，不会随点播接口导出，也不会交给第三方脚本。清空输入框后保存即可移除对应凭据。")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
@@ -44,6 +47,7 @@ struct CloudDriveSettingsView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.orange)
+                .accessibilityIdentifier("cloudCredentials.save")
             }
             .padding(24)
         }
@@ -74,7 +78,7 @@ struct CloudDriveSettingsView: View {
                 Button {
                     loginProvider = provider
                 } label: {
-                    Label("扫码登录", systemImage: "qrcode.viewfinder")
+                    Label("网页登录", systemImage: "person.crop.circle.badge.checkmark")
                 }
                 .buttonStyle(.bordered)
                 .tint(.orange)
@@ -84,6 +88,23 @@ struct CloudDriveSettingsView: View {
                 .padding(12)
                 .background(Color.primary.opacity(0.08))
                 .cornerRadius(10)
+#if os(iOS)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+#endif
+                .accessibilityIdentifier("cloudCredentials.\(provider.rawValue)")
+
+            HStack {
+                PasteButton(payloadType: String.self) { values in
+                    if let value = values.first { text.wrappedValue = value }
+                }
+                .labelStyle(.titleAndIcon)
+                .tint(.orange)
+                Spacer()
+                Button("清空", role: .destructive) { text.wrappedValue = "" }
+                    .disabled(text.wrappedValue.isEmpty)
+            }
+            .font(.subheadline)
         }
         .padding(16)
     }
@@ -98,9 +119,9 @@ struct CloudDriveSettingsView: View {
                 aliToken = credential
                 try CloudDriveCredentialStore.save(credential, for: .aliToken)
             }
-            EmbeddedSpiderGateway.shared.stop()
+            credentialsDidChange()
             isError = false
-            message = "\(provider.title)扫码登录成功，凭据已保存到本机私有目录"
+            message = "\(provider.title)登录成功，凭据已保存到本机"
             loginProvider = nil
         } catch {
             isError = true
@@ -110,9 +131,8 @@ struct CloudDriveSettingsView: View {
 
     private func save() {
         do {
-            try CloudDriveCredentialStore.save(quarkCookie, for: .quarkCookie)
-            try CloudDriveCredentialStore.save(aliToken, for: .aliToken)
-            EmbeddedSpiderGateway.shared.stop()
+            try CloudDriveCredentialStore.save([.quarkCookie: quarkCookie, .aliToken: aliToken])
+            credentialsDidChange()
             isError = false
             message = "已安全保存；下次网盘请求会自动使用新凭据"
         } catch {
@@ -120,5 +140,12 @@ struct CloudDriveSettingsView: View {
             message = error.localizedDescription
         }
     }
-}
+
+    private func credentialsDidChange() {
+#if os(macOS)
+        EmbeddedSpiderGateway.shared.stop()
 #endif
+        // iOS refreshes the trusted native configuration before every request;
+        // its single in-process Node engine must not be stopped or restarted.
+    }
+}

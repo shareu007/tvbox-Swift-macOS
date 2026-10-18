@@ -62,7 +62,11 @@ export function createGateway(config, dependencies = {}) {
   const catVod = dependencies.catVod || new CatVodManager({ ...config, cloudConfig: {} });
   const trustedFetch = dependencies.fetchValue || fetch;
   const cloudCredentials = {
-    get quarkCookie() { return String(config.cloudConfig?.quarkCookie || ""); }
+    get quarkCookie() { return String(config.cloudConfig?.quarkCookie || ""); },
+    set quarkCookie(value) {
+      config.cloudConfig ||= {};
+      config.cloudConfig.quarkCookie = String(value || "");
+    }
   };
   const server = http.createServer(async (request, response) => {
     try {

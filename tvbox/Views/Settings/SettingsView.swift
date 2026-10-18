@@ -38,6 +38,7 @@ struct SettingsView: View {
     @State private var showAbout = false
     @State private var sourceSearchText = ""
     @State private var configSwitchMessage: String?
+    @State private var cloudCredentialCount = CloudDriveCredentialStore.configuredCount
     @State private var showingPicker: PickerType = .none
     
     enum PickerType {
@@ -111,23 +112,22 @@ struct SettingsView: View {
                             .buttonStyle(.plain)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
-#if os(macOS)
                         Divider().background(Color.primary.opacity(0.1))
                         NavigationLink {
                             CloudDriveSettingsView()
+                                .onDisappear { cloudCredentialCount = CloudDriveCredentialStore.configuredCount }
                         } label: {
                             SettingsRow(
                                 icon: "externaldrive.badge.icloud",
                                 title: "网盘设置",
-                                value: CloudDriveCredentialStore.configuredCount == 0
-                                    ? "123 无需凭据"
-                                    : "已配置 \(CloudDriveCredentialStore.configuredCount) 项",
+                                value: cloudCredentialCount == 0
+                                    ? "配置 Cookie / Token"
+                                    : "已配置 \(cloudCredentialCount) 项",
                                 action: nil
                             )
                         }
                         .buttonStyle(.plain)
                         .frame(maxWidth: .infinity, alignment: .leading)
-#endif
                     }
                     
                     SectionCard(title: "外观") {

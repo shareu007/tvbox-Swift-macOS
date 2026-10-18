@@ -1,8 +1,17 @@
-#if os(macOS)
 import XCTest
 @testable import TVBox
 
 final class CloudDriveLoginCredentialExtractorTests: XCTestCase {
+    func testLoginOnlyCapturesCredentialsOnOfficialHTTPSOrigins() {
+        XCTAssertTrue(CloudDriveLoginProvider.quark.allowsCredentialCapture(at: URL(string: "https://pan.quark.cn/")))
+        XCTAssertTrue(CloudDriveLoginProvider.ali.allowsCredentialCapture(at: URL(string: "https://www.alipan.com/drive")))
+        XCTAssertTrue(CloudDriveLoginProvider.ali.allowsCredentialCapture(at: URL(string: "https://www.aliyundrive.com/")))
+        for url in ["http://pan.quark.cn", "https://quark.cn.example.test", "https://example.test", "about:blank"] {
+            XCTAssertFalse(CloudDriveLoginProvider.quark.allowsCredentialCapture(at: URL(string: url)))
+        }
+        XCTAssertFalse(CloudDriveLoginProvider.ali.allowsCredentialCapture(at: URL(string: "https://pan.quark.cn")))
+    }
+
     func testQuarkCookieRequiresLoginMarkerAndIncludesAllQuarkCookies() throws {
         let cookies = [
             try XCTUnwrap(HTTPCookie(properties: [
@@ -69,4 +78,3 @@ final class CloudDriveLoginCredentialExtractorTests: XCTestCase {
         XCTAssertNil(CloudDriveLoginCredentialExtractor.aliRefreshToken(from: values))
     }
 }
-#endif
