@@ -352,10 +352,18 @@ export async function playQuarkSourceEpisode(file, credentials, fetchValue, orig
 
 async function cachedQuarkSourceFile(file, resource, credentials, fetchValue) {
   const name = `.TVBox源播放-${resource.slice(0, 24)}`;
-  const listing = await quarkJSON(`file/sort?${QUARK_QUERY}&pdir_fid=0&_page=1&_size=200&_sort=file_type:asc,updated_at:desc`, {
-    credentials, fetchValue
-  });
-  let directoryId = listing?.data?.list?.find(item => Number(item?.dir) === 1 && item.file_name === name)?.fid;
+  let directoryId;
+  for (let page = 1; page <= 100; page += 1) {
+    const listing = await quarkJSON(`file/sort?${QUARK_QUERY}&pdir_fid=0&_page=${page}&_size=200&_sort=file_type:asc,updated_at:desc`, {
+      credentials, fetchValue
+    });
+    const entries = listing?.data?.list || [];
+    directoryId = entries.find(item => Number(item?.dir) === 1 && item.file_name === name)?.fid;
+    if (directoryId) break;
+    const total = Number(listing?.metadata?._total ?? listing?.data?.metadata?._total);
+    if (entries.length < 200 || (Number.isFinite(total) && page * 200 >= total)) break;
+    if (page === 100) throw new Error("夸克目录过多，无法安全定位播放缓存");
+  }
   if (!directoryId) {
     const created = await quarkJSON(`file?${QUARK_QUERY}`, {
       body: { pdir_fid: "0", file_name: name, dir_path: "", dir_init_lock: false }, credentials, fetchValue

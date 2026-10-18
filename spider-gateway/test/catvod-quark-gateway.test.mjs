@@ -10,7 +10,7 @@ function episode(mode = "original") {
 }
 
 async function setup(t, options = {}) {
-  const observed = { requests: [], sourceCalls: 0, saves: 0, folderName: null, savedFiles: [] };
+  const observed = { requests: [], sourceCalls: 0, saves: 0, folders: 0, rootPages: [], folderName: null, savedFiles: [] };
   const gateway = createGateway(loadConfig({ token: "fixture-gateway", cloudConfig: {
     quarkCookie: options.missingCookie ? "" : "fixture-cookie"
   } }), {
@@ -25,12 +25,19 @@ async function setup(t, options = {}) {
       if (url.pathname.endsWith("/share/sharepage/detail")) return Response.json({ data: { list: options.missingFile ? [] : [{
         fid: "fixture-file", share_fid_token: "fixture-fresh-file-token", file_name: "movie.mp4", size: 10 * 1024 * 1024
       }] } });
-      if (url.pathname.endsWith("/file/sort")) return Response.json({ data: { list:
-        url.searchParams.get("pdir_fid") === "0"
-          ? (observed.folderName ? [{ dir: 1, fid: "fixture-cache", file_name: observed.folderName }] : [])
-          : observed.savedFiles
-      } });
+      if (url.pathname.endsWith("/file/sort")) {
+        if (url.searchParams.get("pdir_fid") !== "0") return Response.json({ data: { list: observed.savedFiles } });
+        const page = Number(url.searchParams.get("_page"));
+        observed.rootPages.push(page);
+        if ((options.cacheSecondPage && observed.folderName && page === 1) || options.fullRoot) {
+          return Response.json({ metadata: { _total: options.fullRoot ? 100000 : 201 }, data: { list:
+            Array.from({ length: 200 }, (_, i) => ({ dir: 1, fid: `fixture-other-${i}`, file_name: `other-${i}` }))
+          } });
+        }
+        return Response.json({ data: { list: observed.folderName ? [{ dir: 1, fid: "fixture-cache", file_name: observed.folderName }] : [] } });
+      }
       if (url.pathname.endsWith("/file")) {
+        observed.folders += 1;
         observed.folderName = JSON.parse(request.body).file_name;
         assert.doesNotMatch(observed.folderName, /fixture-cookie/);
         return Response.json({ data: { fid: "fixture-cache" } });
@@ -149,4 +156,21 @@ test("User changes in a CatVod cache folder are preserved and cannot play a diff
   assert.equal(observed.saves, 1);
   assert.equal(observed.savedFiles[0].file_name, "unrelated.mp4");
   assert.equal(observed.requests.some(p => p.endsWith("/file/delete")), false);
+});
+
+test("A cache folder beyond the first root page is reused instead of duplicated", async t => {
+  const { play, observed } = await setup(t, { cacheSecondPage: true });
+  assert.equal((await play("speed")).status, 200);
+  assert.equal((await play("speed")).status, 200);
+  assert.deepEqual(observed.rootPages, [1, 1, 2]);
+  assert.equal(observed.folders, 1);
+  assert.equal(observed.saves, 1);
+});
+
+test("An exhausted cache search fails without creating another account folder", async t => {
+  const { play, observed } = await setup(t, { fullRoot: true });
+  assert.equal((await play("speed")).status, 502);
+  assert.equal(observed.rootPages.length, 100);
+  assert.equal(observed.folders, 0);
+  assert.equal(observed.saves, 0);
 });

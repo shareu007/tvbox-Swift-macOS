@@ -246,14 +246,21 @@ class NetworkManager {
     static func sanitizedRedirectRequest(
         _ request: URLRequest,
         originalURL: URL?
-    ) -> URLRequest {
+    ) -> URLRequest? {
+        guard let target = request.url,
+              ["http", "https"].contains(target.scheme?.lowercased() ?? ""),
+              target.host != nil, target.user == nil, target.password == nil,
+              !(originalURL?.scheme?.lowercased() == "https" && target.scheme?.lowercased() == "http") else {
+            return nil
+        }
         guard NetworkOrigin(url: request.url) != NetworkOrigin(url: originalURL) else {
             return request
         }
-        var sanitized = request
-        for header in ["Authorization", "Proxy-Authorization", "Cookie"] {
-            sanitized.setValue(nil, forHTTPHeaderField: header)
-        }
+        // Custom headers and signed Referers can be credentials too. A fresh
+        // request also avoids Foundation merging previously removed headers.
+        guard ["GET", "HEAD"].contains(request.httpMethod ?? "GET") else { return nil }
+        var sanitized = URLRequest(url: target, cachePolicy: request.cachePolicy, timeoutInterval: request.timeoutInterval)
+        sanitized.httpMethod = request.httpMethod
         return sanitized
     }
     
@@ -402,7 +409,7 @@ final class ProtectedRequestDelegate: NSObject, URLSessionDataDelegate {
         completionHandler: @escaping (URLRequest?) -> Void
     ) {
         completionHandler(
-            NetworkManager.sanitizedRedirectRequest(request, originalURL: originalURL)
+            NetworkManager.sanitizedRedirectRequest(request, originalURL: response.url ?? originalURL)
         )
     }
 

@@ -253,15 +253,27 @@ final class RuntimeSafetyTests: XCTestCase {
         request.setValue("Bearer secret", forHTTPHeaderField: "Authorization")
         request.setValue("session=secret", forHTTPHeaderField: "Cookie")
         request.setValue("Basic secret", forHTTPHeaderField: "Proxy-Authorization")
+        request.setValue("fixture-api-key", forHTTPHeaderField: "X-Api-Key")
+        request.setValue("https://source.example/?signature=fixture", forHTTPHeaderField: "Referer")
 
-        let sanitized = NetworkManager.sanitizedRedirectRequest(
+        let sanitized = try XCTUnwrap(NetworkManager.sanitizedRedirectRequest(
             request,
             originalURL: originalURL
-        )
+        ))
 
         XCTAssertNil(sanitized.value(forHTTPHeaderField: "Authorization"))
         XCTAssertNil(sanitized.value(forHTTPHeaderField: "Cookie"))
         XCTAssertNil(sanitized.value(forHTTPHeaderField: "Proxy-Authorization"))
+        XCTAssertNil(sanitized.value(forHTTPHeaderField: "X-Api-Key"))
+        XCTAssertNil(sanitized.value(forHTTPHeaderField: "Referer"))
+    }
+
+    func testProtectedRedirectRejectsHTTPSDowngradeAndCredentialBearingTargets() throws {
+        let original = try XCTUnwrap(URL(string: "https://source.example/image"))
+        for target in ["http://source.example/image", "https://demo:secret@example.com/image", "file:///etc/passwd"] {
+            let request = URLRequest(url: try XCTUnwrap(URL(string: target)))
+            XCTAssertNil(NetworkManager.sanitizedRedirectRequest(request, originalURL: original))
+        }
     }
 
     func testSameOriginRedirectKeepsAuthorizationHeader() throws {
@@ -270,10 +282,10 @@ final class RuntimeSafetyTests: XCTestCase {
         var request = URLRequest(url: redirectedURL)
         request.setValue("Basic credential", forHTTPHeaderField: "Authorization")
 
-        let sanitized = NetworkManager.sanitizedRedirectRequest(
+        let sanitized = try XCTUnwrap(NetworkManager.sanitizedRedirectRequest(
             request,
             originalURL: originalURL
-        )
+        ))
 
         XCTAssertEqual(
             sanitized.value(forHTTPHeaderField: "Authorization"),

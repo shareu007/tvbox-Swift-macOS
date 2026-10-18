@@ -183,6 +183,12 @@ final class HomeBrowseFilterTests: XCTestCase {
         XCTAssertEqual(Set(HomeBrowseFacet.genre.values(in: video)), ["动作", "喜剧"])
         let preferred = try JSONDecoder().decode(Movie.Video.self, from: Data(#"{"vod_id":1,"type_name":"剧情","vod_class":"动作"}"#.utf8))
         XCTAssertEqual(preferred.type, "剧情", "type_name 优先于 vod_class")
+        for primary in ["", "  \n"] {
+            let data = try JSONSerialization.data(withJSONObject: ["vod_id": 1, "type_name": primary, "vod_class": "动作,喜剧"])
+            XCTAssertEqual(try JSONDecoder().decode(Movie.Video.self, from: data).type, "动作,喜剧")
+        }
+        let tag = try JSONDecoder().decode(Movie.Video.self, from: Data(#"{"vod_id":1,"type_name":" ","vod_class":" ","vod_tag":"科幻"}"#.utf8))
+        XCTAssertEqual(tag.type, "科幻")
     }
 
     func testGenreFacetNormalizesAliasesTraditionalAndSuffixes() {

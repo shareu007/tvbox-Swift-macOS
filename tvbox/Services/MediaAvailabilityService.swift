@@ -217,10 +217,13 @@ struct MediaAvailabilityService {
     }()
 
     /// 使用共享会话抽检请求；取消时依赖结构化并发中断字节流，不销毁共享会话。
-    static func readSampleShared(_ originalRequest: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    static func readSampleShared(_ originalRequest: URLRequest, session: URLSession = probeSession) async throws -> (Data, HTTPURLResponse) {
         var request = originalRequest
         request.setValue("bytes=0-\(maximumSampleBytes - 1)", forHTTPHeaderField: "Range")
-        let (bytes, response) = try await probeSession.bytes(for: request, delegate: MediaProbeRedirectDelegate())
+        let (bytes, response) = try await session.bytes(for: request, delegate: MediaProbeRedirectDelegate())
+        // Reaching the sample limit does not finish a range-ignoring transfer.
+        // Cancel only this task, leaving the shared connection pool usable.
+        defer { bytes.task.cancel() }
         guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         var data = Data()
         if (200...299).contains(response.statusCode) {

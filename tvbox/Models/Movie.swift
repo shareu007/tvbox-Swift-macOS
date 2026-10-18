@@ -85,7 +85,7 @@ struct Movie: Codable {
             self.year = (try? container.decode(String.self, forKey: .year))
                 ?? (try? container.decode(Int.self, forKey: .year)).map(String.init) ?? ""
             self.area = (try? container.decode(String.self, forKey: .area)) ?? ""
-            self.type = (try? container.decode(String.self, forKey: .type))
+            self.type = (try? container.decode(String.self, forKey: .type)).flatMap(Self.nonblankType)
                 ?? Self.decodeFallbackType(from: decoder)
                 ?? ""
             self.director = (try? container.decode(String.self, forKey: .director)) ?? ""
@@ -111,10 +111,14 @@ struct Movie: Codable {
 
         private static func decodeFallbackType(from decoder: Decoder) -> String? {
             guard let fallback = try? decoder.container(keyedBy: FallbackKeys.self) else { return nil }
-            if let value = try? fallback.decode(String.self, forKey: .vodClass), !value.isEmpty {
+            if let value = (try? fallback.decode(String.self, forKey: .vodClass)).flatMap(nonblankType) {
                 return value
             }
-            return try? fallback.decode(String.self, forKey: .vodTag)
+            return (try? fallback.decode(String.self, forKey: .vodTag)).flatMap(nonblankType)
+        }
+
+        private static func nonblankType(_ value: String) -> String? {
+            value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : value
         }
     }
 }

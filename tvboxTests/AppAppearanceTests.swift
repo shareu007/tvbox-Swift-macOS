@@ -128,7 +128,7 @@ final class AppAppearanceTests: XCTestCase {
                        "tvbox/Views/Settings/AppearanceSettingsView.swift", "tvboxTests/Fixtures/AppearanceSceneProbe.swift"]
         let arguments = ["swiftc", "-parse-as-library", "-swift-version", "5", "-target", target,
                          "-D", "APPEARANCE_SCENE_PROBE", "-module-cache-path",
-                         repository.appendingPathComponent("build/DerivedData/ModuleCache.noindex/AppearanceProbe").path]
+                         repository.appendingPathComponent("build/DerivedData/ModuleCache.noindex/AppearanceProbe").resolvingSymlinksInPath().path]
             + sources.map { repository.appendingPathComponent($0).path } + ["-o", executable.path]
         let compileLog = repository.appendingPathComponent("build/DerivedData/Logs/appearance-scene-test-compile.log")
         try FileManager.default.createDirectory(at: compileLog.deletingLastPathComponent(), withIntermediateDirectories: true)

@@ -71,6 +71,7 @@ class SourceService {
         // 需要兜底时直接复用结果，减少一次串行等待。
         var speculativeListURL: String?
         var speculativeListTask: Task<[Movie.Video]?, Never>?
+        defer { speculativeListTask?.cancel() }
         if sourceBean.type == 4 {
             // Type 4: 远程接口，需要 extend 和 filter 参数
             var queryItems: [URLQueryItem] = [
@@ -116,7 +117,6 @@ class SourceService {
             speculativeListTask = Task { try? await self.loadVideoList(url: listURL, source: sourceBean, maxRetries: 0) }
             jsonStr = try await network.getString(from: url, maxRetries: maxRetries)
         }
-        defer { speculativeListTask?.cancel() }
 
         var (sorts, homeVideos) = try parseSort(jsonStr, sourceBean: sourceBean)
 
@@ -126,13 +126,23 @@ class SourceService {
         let needsFallback = homeVideos.isEmpty || picMissingCount > homeVideos.count / 2
 
         if needsFallback, let listURL = speculativeListURL {
-            if let speculative = await speculativeListTask?.value, !speculative.isEmpty {
+            let speculative: [Movie.Video]?
+            if let task = speculativeListTask {
+                speculative = await withTaskCancellationHandler {
+                    await task.value
+                } onCancel: {
+                    task.cancel()
+                }
+            } else { speculative = nil }
+            try Task.checkCancellation()
+            if let speculative, !speculative.isEmpty {
                 homeVideos = speculative
             } else if let fallback = try? await loadVideoList(url: listURL, source: sourceBean, maxRetries: maxRetries), !fallback.isEmpty {
                 homeVideos = fallback
             }
         }
 
+        try Task.checkCancellation()
         return (sorts, homeVideos)
     }
     

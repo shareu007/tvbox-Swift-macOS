@@ -77,6 +77,7 @@ struct OfflineDownloadWorker {
             if size > 0 { existing[asset.name] = size }
         }
         let tracker = OfflineHLSProgress(existing: existing, total: plan.assets.count, progress: progress)
+        try await tracker.validateSize()
         await tracker.report()
         let pending = plan.assets.filter { existing[$0.name] == nil }
         try await withThrowingTaskGroup(of: Void.self) { group in
@@ -100,6 +101,7 @@ struct OfflineDownloadWorker {
             while try await group.next() != nil { if let asset = iterator.next() { add(asset) } }
         }
         try Task.checkCancellation()
+        try await tracker.validateSize()
         try OfflineDownloadStore.writePrivate(Data(plan.manifest.utf8), to: directory.appendingPathComponent("offline.m3u8"))
         for name in ["media.partial", "media.partial.resume.json", "playlist.tmp", "playlist.tmp.resume.json"] {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
@@ -136,8 +138,12 @@ private actor OfflineHLSProgress {
     func complete(_ name: String, bytes: Int64) throws {
         sizes[name] = bytes
         completed.insert(name)
-        guard sizes.values.reduce(0, +) <= 100 * 1024 * 1024 * 1024 else { throw OfflineDownloadError.tooLarge }
+        try validateSize()
         if completed.count == total || Date().timeIntervalSince(lastReport) >= 0.25 { report() }
+    }
+
+    func validateSize() throws {
+        guard totalBytes <= 100 * 1024 * 1024 * 1024 else { throw OfflineDownloadError.tooLarge }
     }
 
     func report() {

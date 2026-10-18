@@ -415,7 +415,7 @@ class HomeViewModel: ObservableObject {
             }
             return section
         }
-        // 主分区未覆盖的分类（纪录片、短剧、解说等）聚合为"其他"混合推荐，轮转取样保证每个分类都露出。
+        // 主分区未覆盖的分类（纪录片、短剧、解说等）最多取三类聚合为"其他"，保持首页请求有界。
         let usedIDs = Set(plans.flatMap { $0.isMixed ? $0.contributingSorts.map(\.id) : [$0.sort.id] })
         var leftover = Self.orderedRecommendationCategories(from: sorts).filter { !usedIDs.contains($0.id) }
         if mixedMoviePlanned {

@@ -19,6 +19,52 @@ private final class HomeProtocolStub: URLProtocol {
 
 @MainActor
 final class HomeSourceProtocolTests: XCTestCase {
+    func testFailedCategoryCancelsConcurrentListRequest() async throws {
+        try await verifySpeculativeListCancellation(categoryFails: true)
+    }
+
+    func testCancelledHomepageCancelsConcurrentListRequest() async throws {
+        try await verifySpeculativeListCancellation(categoryFails: false)
+    }
+
+    private func verifySpeculativeListCancellation(categoryFails: Bool) async throws {
+        let listStarted = expectation(description: "Speculative request started")
+        let listStopped = expectation(description: "Speculative request cancelled")
+        let categoryFinished = expectation(description: "Category response delivered")
+        SortCancellationStub.onStart = { stub in
+            Task { @MainActor in
+                if stub.isList {
+                    listStarted.fulfill()
+                } else {
+                    await self.fulfillment(of: [listStarted], timeout: 2)
+                    stub.finish(status: categoryFails ? 500 : 200, text: #"{"class":[],"list":[]}"#)
+                    categoryFinished.fulfill()
+                }
+            }
+        }
+        SortCancellationStub.onStop = { if $0 { listStopped.fulfill() } }
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [SortCancellationStub.self]
+        let source = SourceBean(key: "cancel-fixture", api: "https://fixture.example/api", type: 1)
+        let service = SourceService(network: NetworkManager(configuration: config))
+        let load = Task { try await service.getSort(sourceBean: source, maxRetries: 0) }
+        defer {
+            load.cancel()
+            SortCancellationStub.onStart = nil
+            SortCancellationStub.onStop = nil
+        }
+        if !categoryFails {
+            await fulfillment(of: [categoryFinished], timeout: 2)
+            load.cancel()
+        }
+        do {
+            _ = try await load.value
+            XCTFail("Failed or cancelled categories must not produce a successful homepage")
+        } catch {}
+        if categoryFails { await fulfillment(of: [categoryFinished], timeout: 2) }
+        await fulfillment(of: [listStopped], timeout: 2)
+    }
+
     private func service(_ respond: @escaping (URLRequest) throws -> String) -> SourceService {
         HomeProtocolStub.respond = respond
         let configuration = URLSessionConfiguration.ephemeral
@@ -111,4 +157,23 @@ final class HomeSourceProtocolTests: XCTestCase {
         XCTAssertEqual(response.homeVideos.map(\.id), ["a", "b"])
     }
 
+}
+
+private final class SortCancellationStub: URLProtocol {
+    nonisolated(unsafe) static var onStart: ((SortCancellationStub) -> Void)?
+    nonisolated(unsafe) static var onStop: ((Bool) -> Void)?
+    var isList: Bool {
+        URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.contains {
+            $0.name == "ac" && $0.value == "videolist"
+        } == true
+    }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() { Self.onStart?(self) }
+    override func stopLoading() { Self.onStop?(isList) }
+    func finish(status: Int, text: String) {
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(text.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
 }

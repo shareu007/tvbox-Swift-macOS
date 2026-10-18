@@ -80,6 +80,25 @@ final class MediaAvailabilityServiceTests: XCTestCase {
         let (data, _) = try await MediaAvailabilityService.readSample(URL(string: "https://example.com/media")!, configuration: config)
         XCTAssertEqual(data.count, MediaAvailabilityService.maximumSampleBytes)
     }
+
+    func testSharedSampleCancelsRangeIgnoringTransfersAndKeepsSessionUsable() async throws {
+        let stopped = expectation(description: "Each sample transfer was cancelled")
+        stopped.expectedFulfillmentCount = 2
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MediaStreamingURLProtocol.self]
+        let session = URLSession(configuration: config)
+        MediaStreamingURLProtocol.onStop = { stopped.fulfill() }
+        defer {
+            session.invalidateAndCancel()
+            MediaStreamingURLProtocol.onStop = nil
+        }
+        for index in 0..<2 {
+            let request = URLRequest(url: URL(string: "https://example.com/stream-\(index)")!)
+            let (data, _) = try await MediaAvailabilityService.readSampleShared(request, session: session)
+            XCTAssertEqual(data.count, MediaAvailabilityService.maximumSampleBytes)
+        }
+        await fulfillment(of: [stopped], timeout: 2)
+    }
     private func info(_ urls: [String]) -> VodInfo {
         let flags = urls.indices.map { "线路\($0)" }
         return VodInfo.from(video: Movie.Video(id: "test"), playFrom: flags.joined(separator: "$$$"),
@@ -186,4 +205,17 @@ private final class MediaSampleURLProtocol: URLProtocol {
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}
+}
+
+private final class MediaStreamingURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var onStop: (() -> Void)?
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(repeating: 0, count: 64 * 1024))
+        // The server keeps streaming until the sample reader cancels its task.
+    }
+    override func stopLoading() { Self.onStop?() }
 }

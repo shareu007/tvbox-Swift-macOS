@@ -230,6 +230,32 @@ final class OfflineDownloadTests: XCTestCase {
         XCTAssertEqual(OfflineFixtureProtocol.requests.count, 5)
     }
 
+    func testHLSRetryRejectsOversizedReusableAssetsBeforeWritingCompletedManifest() async throws {
+        let count = 201
+        let playlist = "#EXTM3U\n#EXT-X-TARGETDURATION:2\n" + (0..<count).map { "#EXTINF:2,\n\($0).ts\n" }.joined() + "#EXT-X-ENDLIST\n"
+        OfflineFixtureProtocol.handler = { request in
+            .init(body: request.url?.pathExtension == "m3u8" ? Data(playlist.utf8) : Data(repeating: 71, count: 188))
+        }
+        let worker = OfflineDownloadWorker(client: client)
+        let result = SpiderPlaybackResult(url: base.appendingPathComponent("movie.m3u8").absoluteString, headers: [:], qualityOptions: [])
+        _ = try await worker.run(result: result, directory: root) { _ in }
+        let manifest = root.appendingPathComponent("offline.m3u8")
+        try FileManager.default.removeItem(at: manifest)
+        // Sparse files model a failed 100 GiB transfer without allocating its payload.
+        for index in 0..<count {
+            let handle = try FileHandle(forWritingTo: root.appendingPathComponent("asset-\(index).ts"))
+            try handle.truncate(atOffset: 512 * 1024 * 1024)
+            try handle.close()
+        }
+        do {
+            _ = try await worker.run(result: result, directory: root) { _ in }
+            XCTFail("A retry cannot turn an oversized package into a completed download")
+        } catch OfflineDownloadError.tooLarge {
+            // Expected for both downloaded and reused bytes.
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: manifest.path))
+    }
+
     func testHLSUsesFourConcurrentSegmentsAndInvalidatesCacheWhenCredentialsChange() async throws {
         let playlist = "#EXTM3U\n#EXT-X-TARGETDURATION:2\n" + (0..<8).map { "#EXTINF:2,\n\($0).ts\n" }.joined() + "#EXT-X-ENDLIST\n"
         OfflineFixtureProtocol.handler = { request in
