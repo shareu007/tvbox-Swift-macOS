@@ -63,7 +63,8 @@ jobs:
           workflow = Path('.github/workflows/ios-release.yml').read_text()
           inputs = ['tvbox', 'tvboxTests', 'tvbox-Tests', 'tvbox.xcodeproj', 'project.yml',
                     'Config/Templates', 'Config/Shared.xcconfig', 'scripts/prepare_local_config.sh',
-                    'Vendor/MobileNodeRuntime', 'spider-gateway/src', 'spider-gateway/fixtures',
+                    'Vendor/MobileNodeRuntime/Package.swift', 'Vendor/MobileNodeRuntime/Sources',
+                    'spider-gateway/src', 'spider-gateway/fixtures',
                     'scripts/prepare_mobile_gateway.sh']
           verified_id = ''
           for run in api(f'repos/{repo}/actions/runs?branch={branch}&per_page=10')['workflow_runs']:
@@ -147,6 +148,7 @@ jobs:
           assert architectures == 'arm64', architectures
           assert (app / 'Frameworks/NodeMobile.framework/NodeMobile').is_file(), 'Missing standalone script engine'
           assert (app / 'SpiderGateway/mobile-entry.mjs').is_file(), 'Missing mobile script runner'
+          assert 'polywasm' in (app / 'LICENSE.node.txt').read_text(), 'Incomplete mobile runtime license'
           version = info['CFBundleShortVersionString']
           build = info['CFBundleVersion']
           name = f'TVBox-iOS-iPadOS-{version}-build{build}-unsigned.ipa'
