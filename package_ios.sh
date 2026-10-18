@@ -171,7 +171,7 @@ if [[ "$UNSIGNED_BUILD" == "1" ]]; then
     mkdir -p "$unsigned_staging/Payload"
     ditto "$archived_app" "$unsigned_staging/Payload/TVBox.app"
     ditto -c -k --keepParent --norsrc --noextattr "$unsigned_staging/Payload" "$OUTPUT_IPA"
-    echo "✅ 未签名 IPA: $OUTPUT_IPA（安装前需要重新签名）"
+    echo "✅ 未签名 IPA: ${OUTPUT_IPA}（安装前需要重新签名）"
     exit 0
 fi
 

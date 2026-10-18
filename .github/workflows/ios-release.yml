@@ -37,7 +37,7 @@ jobs:
           xcodegen generate
           xcodebuild -version
 
-      - name: Find verified tests for unchanged build inputs
+      - name: Find verified tests for unchanged application sources
         id: verified
         env:
           GH_TOKEN: ${{ github.token }}
@@ -56,7 +56,8 @@ jobs:
           branch = os.environ['GITHUB_REF_NAME']
           current_id = os.environ['GITHUB_RUN_ID']
           workflow = Path('.github/workflows/ios-release.yml').read_text()
-          inputs = ['tvbox', 'tvboxTests', 'tvbox-Tests', 'tvbox.xcodeproj', 'project.yml', 'Config', 'scripts', 'package_ios.sh']
+          inputs = ['tvbox', 'tvboxTests', 'tvbox-Tests', 'tvbox.xcodeproj', 'project.yml',
+                    'Config/Templates', 'Config/Shared.xcconfig', 'scripts/prepare_local_config.sh']
           verified_id = ''
           for run in api(f'repos/{repo}/actions/runs?branch={branch}&per_page=10')['workflow_runs']:
               if str(run['id']) == current_id:
