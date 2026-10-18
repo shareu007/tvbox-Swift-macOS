@@ -130,6 +130,7 @@
 		73B6A75403177B0DEF07F0A2 /* HomeSourceProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3756798FAD2BF76EE9BDC19 /* HomeSourceProtocolTests.swift */; };
 		74D54978A79B511FDE79524D /* VodInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA608E781D094B187D3034FD /* VodInfo.swift */; };
 		7686C56E8FB63134FF878EDE /* DetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8B3DC7E0B9C01A294C47FC /* DetailViewModel.swift */; };
+		76C19D263D1A0F34C409A99A /* AppearanceSceneProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B3B205390F987666472014 /* AppearanceSceneProbe.swift */; };
 		7929088532D3E0747BC48E23 /* SavedVodConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64ECD1165C4D015CD902C362 /* SavedVodConfig.swift */; };
 		797DC8B9850F3F5E9BCD45E8 /* HomeLoadBudgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4614ADD55A9FF8995B61846D /* HomeLoadBudgetTests.swift */; };
 		79825AAD3B10CEC04E0011F9 /* RuntimeSafetyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 398C8B3127805B0DCC1401CA /* RuntimeSafetyTests.swift */; };
@@ -198,6 +199,7 @@
 		C13E02E9A6451F57D21590A3 /* SourceBean.swift in Sources */ = {isa = PBXBuildFile; fileRef = 617855BC3AE2B293C71A0DA4 /* SourceBean.swift */; };
 		C39AFB0BAF5023CC9AD83936 /* SubtitleControlsSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 350CC86FB49CFBF93FA0B4FE /* SubtitleControlsSnapshotTests.swift */; };
 		C45894285D17E2F435F21E15 /* ImageLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFCE8382863E7137647743FD /* ImageLoaderTests.swift */; };
+		C52872E7CCD46A907006BFED /* AppearanceSceneProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B3B205390F987666472014 /* AppearanceSceneProbe.swift */; };
 		C57B122F94EEEF07B4DCD27E /* CloudDriveWebLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF6E22DC1F154B553BEFBAC2 /* CloudDriveWebLoginView.swift */; };
 		C5D82F09D40ACA9325FDB7A5 /* SystemSubtitleController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A101114FFC5AB5DCA76C495E /* SystemSubtitleController.swift */; };
 		C5E14579020E1D6AE5E46F06 /* TVBoxConfigPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42B1CF0669B3C9F8AC40986 /* TVBoxConfigPreset.swift */; };
@@ -337,6 +339,7 @@
 		7FAB47D447BF6A9FC1A80BE9 /* ChannelOverlayGroupWidthPropertyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelOverlayGroupWidthPropertyTests.swift; sourceTree = "<group>"; };
 		8004992FE671E9008D045EF3 /* SubtitleSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleSelectionTests.swift; sourceTree = "<group>"; };
 		811647F5CDB1BE648F91A4B8 /* SourceVerificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceVerificationTests.swift; sourceTree = "<group>"; };
+		82B3B205390F987666472014 /* AppearanceSceneProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSceneProbe.swift; sourceTree = "<group>"; };
 		83824D4B55323548256BE0BC /* MPVPlayerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVPlayerController.swift; sourceTree = "<group>"; };
 		867925306B542157E68AD092 /* CloudDriveLoginCredentialExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudDriveLoginCredentialExtractorTests.swift; sourceTree = "<group>"; };
 		891CDF26033137BB5FDA21BD /* AppearanceVisualTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceVisualTests.swift; sourceTree = "<group>"; };
@@ -705,6 +708,7 @@
 		A498517221287225A9EF6D6F /* Fixtures */ = {
 			isa = PBXGroup;
 			children = (
+				82B3B205390F987666472014 /* AppearanceSceneProbe.swift */,
 				05C31AA209834F010EE54E8B /* README.md */,
 				04B72C084F2374776D062E7E /* subtitles.mp4 */,
 			);
@@ -1027,6 +1031,7 @@
 			files = (
 				163F73AD0D8CB0BDE1E4B87D /* AppAppearanceTests.swift in Sources */,
 				2104A4B08FD996B4D2282243 /* AppStartupRoutingTests.swift in Sources */,
+				C52872E7CCD46A907006BFED /* AppearanceSceneProbe.swift in Sources */,
 				60B11538CAB77E488DA1F91B /* AppearanceVisualTests.swift in Sources */,
 				53B039337FFF66C4CE8C02C1 /* BrowseVisualSnapshotTests.swift in Sources */,
 				CF28A416A2BCEF2E37892899 /* ChannelOverlayGroupWidthPropertyTests.swift in Sources */,
@@ -1156,6 +1161,7 @@
 			files = (
 				433FE417D5BAA6C64C3CB457 /* AppAppearanceTests.swift in Sources */,
 				A817DA37E5076DB3F866400B /* AppStartupRoutingTests.swift in Sources */,
+				76C19D263D1A0F34C409A99A /* AppearanceSceneProbe.swift in Sources */,
 				7E809F665A14A20FE885C4C2 /* AppearanceVisualTests.swift in Sources */,
 				85215BCA16A10F398EA5DB16 /* BrowseVisualSnapshotTests.swift in Sources */,
 				60BC6F451760DB4E4CF3AF8A /* ChannelOverlayGroupWidthPropertyTests.swift in Sources */,

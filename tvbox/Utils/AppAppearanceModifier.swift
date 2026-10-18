@@ -6,12 +6,15 @@ import AppKit
 /// 只在窗口根视图应用偏好，切换主题不会重建导航或播放器状态。
 struct AppAppearanceModifier: ViewModifier {
     @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
+    #if os(macOS)
+    @StateObject private var systemAppearance = SystemAppearanceObserver()
+    #endif
 
     func body(content: Content) -> some View {
         #if os(macOS)
-        // preferredColorScheme 从手动模式切回 nil 时可能保留旧的窗口外观。
-        // 显式清除窗口偏好，让后续系统外观变化继续传入 SwiftUI。
-        content.background(WindowAppearanceView(mode: appearance))
+        // WindowGroup 切回 nil 时可能保留旧的 SwiftUI 外观环境。
+        // 始终提交明确的场景偏好；自动模式由 AppKit 的系统外观变化驱动。
+        content.preferredColorScheme(appearance.colorScheme ?? systemAppearance.colorScheme)
         #else
         content.preferredColorScheme(appearance.colorScheme)
         #endif
@@ -19,35 +22,25 @@ struct AppAppearanceModifier: ViewModifier {
 }
 
 #if os(macOS)
-private struct WindowAppearanceView: NSViewRepresentable {
-    let mode: AppAppearance
+@MainActor
+private final class SystemAppearanceObserver: ObservableObject {
+    @Published private(set) var colorScheme: ColorScheme
+    private var observation: NSKeyValueObservation?
 
-    func makeNSView(context: Context) -> AppearanceView {
-        let view = AppearanceView()
-        view.mode = mode
-        return view
-    }
-
-    func updateNSView(_ nsView: AppearanceView, context: Context) {
-        nsView.mode = mode
-        nsView.applyAppearance()
-    }
-
-    final class AppearanceView: NSView {
-        var mode: AppAppearance = .system
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            applyAppearance()
-        }
-
-        func applyAppearance() {
-            switch mode {
-            case .system: window?.appearance = nil
-            case .light: window?.appearance = NSAppearance(named: .aqua)
-            case .dark: window?.appearance = NSAppearance(named: .darkAqua)
+    init() {
+        let application = NSApplication.shared
+        colorScheme = Self.colorScheme(for: application.effectiveAppearance)
+        // 观察应用继承的系统外观，避免把窗口自己的手动偏好当作系统值。
+        observation = application.observe(\.effectiveAppearance, options: [.new]) { [weak self] application, _ in
+            let colorScheme = Self.colorScheme(for: application.effectiveAppearance)
+            Task { @MainActor [weak self] in
+                self?.colorScheme = colorScheme
             }
         }
+    }
+
+    private nonisolated static func colorScheme(for appearance: NSAppearance) -> ColorScheme {
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
     }
 }
 #endif
