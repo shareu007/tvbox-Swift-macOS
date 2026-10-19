@@ -1,97 +1,48 @@
 # TVBox-Swift
 
-原生 SwiftUI 多媒体客户端，支持 macOS 14+ 与 iOS/iPadOS 17+。本项目基于
-[Jstrom2022/tvbox-Swift](https://github.com/Jstrom2022/tvbox-Swift) 继续开发。
+适用于 Mac、iPhone 和 iPad 的原生多媒体客户端。添加自己的影视接口，即可浏览分类、搜索影片、播放视频或下载后离线观看。
+
+## 下载与安装
+
+| 平台 | 系统要求 | 当前安装包 |
+| --- | --- | --- |
+| Mac（Apple Silicon / Intel） | macOS 14 及以上 | [下载 DMG · 1.2.0（build 26）](https://github.com/shareu007/tvbox-Swift-macOS/releases/download/v1.2.0/TVBox-macOS.dmg) |
+| iPhone / iPad | iOS / iPadOS 17 及以上 | [下载 IPA · 1.2.0（build 28，未签名预览版）](https://github.com/shareu007/tvbox-Swift-macOS/releases/download/v1.2.0/TVBox-iOS-iPadOS-1.2.0-build28-unsigned.ipa) |
+
+[查看版本说明与文件校验值](https://github.com/shareu007/tvbox-Swift-macOS/releases/tag/v1.2.0) · [全部版本](https://github.com/shareu007/tvbox-Swift-macOS/releases)
+
+- **Mac**：打开 DMG，将 TVBox 拖入“应用程序”。安装包尚未经过 Apple 公证，首次打开可能出现系统提示。
+- **iPhone / iPad**：IPA 是通用设备包，未使用 Apple 证书签名，需自行签名后侧载，不能直接点击安装。
+- **首次使用**：安装包不附带影视接口，需要自行添加。
 
 ## 主要功能
 
-- CMS JSON/XML 数据源（`type=0/1/4`）、分类、搜索、收藏、历史、直播。
-- AVPlayer、VLCKit，以及 macOS 内置 mpv 播放内核；网盘资源支持清晰度选择。
-- mpv 支持 VideoToolbox 硬解、字幕选择与时间偏移；实际解码状态显示在播放控制栏。
-- 来源外挂字幕选择：解析播放响应的 `subt` / `subtitles` / `subtitle` / `subs` 列表，mpv 字幕菜单按名称显示、按需加载，支持切换和关闭。接口必须实际返回字幕地址；视频画面里的硬字幕无法拆分选择。
-- macOS 内置 CatVod Node Gateway，无需 Android 或单独启动服务。
-- 支持 CatVod `index.js` / `index.js.md5`、Basic Auth、校验、会话复用与自动回收。
-- 夸克、夸父、盘搜等网盘搜索协议；夸克网页登录获取 Cookie 并原生播放。
-- 播放时阻止自动休眠，退出后释放播放器、Timer、Node 与缓存资源。
-- [离线下载](docs/offline-downloads.md)：详情选集、直链文件与普通点播 HLS、暂停续传、任务管理及本地播放。
-- 跟随系统或手动选择浅色、深色外观；首页提供分类、年份、地区与类型筛选。
-- 白底简洁应用图标，macOS 首页隐藏重复的窗口标题。
+- **浏览与搜索**：首页推荐、分类、年份 / 地区 / 类型筛选，支持收藏、播放历史和直播。
+- **多种播放内核**：系统播放器、VLC，以及 Mac 内置的 mpv；mpv 支持 VideoToolbox 硬件解码。
+- **字幕与清晰度**：选择视频内封字幕或来源提供的外挂字幕，支持关闭字幕；Mac 的 mpv 还可调整字幕时间偏移，网盘资源可按来源切换清晰度。
+- **离线下载**：选择一集或多集加入队列，查看进度、暂停续传，下载完成后本地播放。
+- **接口兼容**：支持 CMS JSON/XML 和 CatVod `.js` / `.js.md5` 接口；Mac 与 iPhone / iPad build 28 均内置 CatVod 引擎，无需另启电脑服务。
+- **外观与设备适配**：浅色、深色或跟随系统，适配桌面窗口、手机及平板布局。
 
-## 支持边界
+## 开始使用
 
-| 能力 | macOS | iPhone / iPad |
-|---|---:|---:|
-| CMS `type=0/1/4` | ✅ | ✅ |
-| CatVod Node 动态源 | 内置 | 需外部 HTTPS Gateway |
-| Java/DEX `csp_*` JAR | 需兼容 Worker | 需外部 Gateway |
-| 夸克账号与原生网盘解析 | ✅ | 暂未内置 |
+1. 在“设置 → 添加点播接口”输入接口地址，加载成功后可在“我的点播配置”中切换。
+2. 在首页选择来源与分类，或通过搜索查找影片，进入详情选择线路和剧集播放。
+3. 需要离线观看时，在影片详情点击“下载”，再到下载管理中查看任务。
+4. Mac 上需要登录的网盘资源，可在“设置 → 网盘设置”中配置账号凭据。
 
-App 不执行 Java/DEX，也不保证兼容所有第三方规则、网页嗅探、DRM 或解析器。
-远程 CatVod 脚本运行在独立子进程中，不会收到用户的网盘 Cookie/Token。
+## 使用说明
 
-## 构建
+- 影片、海报、分类、筛选条件、字幕和播放地址由第三方接口提供，可用性取决于来源；画面中已经压制的字幕无法单独切换。
+- 离线下载支持可直接读取的视频文件和普通点播 HLS；直播、DRM 保护内容及部分特殊流暂不支持。退出应用后不会继续下载。
+- iPhone / iPad build 28 已支持独立运行 CatVod，尚未提供 Mac 版的网盘凭据设置入口。
+- Android Java/DEX `csp_*` JAR 不在 App 内直接执行，需要兼容的外部运行环境。并非所有第三方规则、网页嗅探或解析器均受支持。
+- 请使用可信且有权访问的接口与内容，不要在公开反馈中上传 Cookie、Token 或私人接口地址。
 
-需要 Xcode 15+、Swift 5.9+ 和 [XcodeGen](https://github.com/yonaskolb/XcodeGen)：
+## 开发资料
 
-```sh
-brew install xcodegen
-xcodegen generate
-open tvbox.xcodeproj
-```
+源码构建、测试、打包及本地配置说明见 [开发文档](docs/development.md)。
 
-命令行验证：
+## 项目来源与许可
 
-```sh
-xcodebuild test -project tvbox.xcodeproj -scheme tvbox-macOS -derivedDataPath build/DerivedData -destination 'platform=macOS'
-cd spider-gateway && npm test
-```
-
-所有编译、测试和打包统一使用 `build/DerivedData`，复用同一路径。DMG / IPA 位于其中的 `Packages/`，iOS Archive 位于 `Archives/`。
-
-## 打包
-
-macOS Universal 2 DMG：
-
-```sh
-./package_mac.sh
-```
-
-默认产物为 ad-hoc 签名且未公证，公开下载时可能出现 Gatekeeper 提示。
-
-[下载 1.2.0 macOS DMG](https://github.com/shareu007/tvbox-Swift-macOS/releases/tag/v1.2.0)。
-此版本包含离线下载、深浅外观、首页浏览改进及发布前隐私修复；详见 [发布审查](docs/release-privacy-review-1.2.0.md)。
-
-iPhone / iPad Archive 或 IPA：
-
-```sh
-cp Config/Templates/Signing.example.xcconfig Config/Local/Signing.xcconfig
-cp Config/Templates/ExportOptions.example.plist Config/Local/ExportOptions.plist # 需要 IPA 时
-./package_ios.sh --check
-./package_ios.sh
-```
-
-需要安装与当前 Xcode 匹配的 iOS Platform，并在本机配置 Apple Developer Team。
-没有导出配置时只生成 `.xcarchive`；有配置时同时生成 `TVBox.ipa`。
-
-## 配置与隐私
-
-- 私人接口、签名配置和导出选项只放在 Git 忽略的 `Config/Local/`。
-- Release 默认打包空预设，不会包含本机数据源。
-- 配置 URL、Gateway Token 和网盘凭据保存在当前用户的私有目录，不写入仓库。
-- 第三方接口和网盘服务由用户自行选择；请确认来源可信及内容授权。
-
-发布前检查：
-
-```sh
-./scripts/audit_public_tree.sh
-./scripts/audit_public_tree.sh --history  # 同时检查可达 Git 历史
-```
-
-详细配置见 [Config/README.md](Config/README.md)，Gateway 协议见
-[spider-gateway/README.md](spider-gateway/README.md)。
-
-## License
-
-项目代码采用 [MIT License](LICENSE)。VLCKitSPM/VLCKit、MPVKit/mpv 和内置 Node.js 保留各自
-许可证，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。本项目仅供技术学习；
-不附带私人影视配置，使用者需自行承担第三方接口、内容版权与账号安全责任。
+本项目基于 [Jstrom2022/tvbox-Swift](https://github.com/Jstrom2022/tvbox-Swift) 继续开发，项目代码采用 [MIT License](LICENSE)。VLC、mpv、Node.js 等组件的许可证见 [第三方声明](THIRD_PARTY_NOTICES.md)。
