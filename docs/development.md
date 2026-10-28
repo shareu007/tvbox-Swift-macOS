@@ -80,3 +80,5 @@ cp Config/Templates/ExportOptions.example.plist Config/Local/ExportOptions.plist
 ```
 
 详细说明见 [本地配置](../Config/README.md) 与 [Spider Gateway](../spider-gateway/README.md)。
+
+首页维护、Release 正文模板及发布流程见 [发布规范](publishing.md)。

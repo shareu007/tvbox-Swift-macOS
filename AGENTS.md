@@ -44,3 +44,13 @@ Pull requests should include the user-visible change, affected platforms (`iOS`,
 ## Security & Configuration Tips
 
 Do not commit signing certificates, provisioning profiles, `IOS-key/secrets.sh`, or files under `Config/Local/`. Keep source URLs and user-provided media configuration out of tests and fixtures unless they are safe, minimal, and non-sensitive. The iOS packaging script must not import certificates into the login keychain or unlock the keychain.
+
+## Public README and Release Publishing
+
+When rewriting the README, preparing a release, uploading/replacing an installation asset, or adding a platform package to an existing release, read [docs/publishing.md](docs/publishing.md) and use [.github/RELEASE_TEMPLATE.md](.github/RELEASE_TEMPLATE.md).
+
+- README structure: product and navigation → platform downloads → core features → quick start → feedback/development links → credits/license. Keep build and packaging commands in `docs/development.md`, and detailed compatibility in `docs/getting-started.md`.
+- Release structure: brief summary → downloads → added/improved/fixed → upgrade notes → collapsed checksums/source. Omit empty sections and describe only changes in the shipped code for each platform.
+- Derive platform, build, signing and preview labels from the actual assets and their source commits. Recheck README and release text whenever DMG/IPA assets are added or replaced.
+- Deliver detailed audits, test counts, local verification paths and build-environment diagnostics to the maintainer separately; public notes contain user-relevant changes, installation requirements and important known issues.
+- For documentation-only publication, push only documentation changes. Verify the rendered Markdown, links and remote text; preserve existing assets, tags and release status unless the user authorized changing them.
